@@ -4,7 +4,7 @@ Typescript Template starter with React Navigation Bottom Tabs and Supabase auth 
 
 # Preview
 
-![../media/authflow.png](../media/authflow.png)
+![media/authflow.png](media/authflow.png)
 
 # Installation
 
