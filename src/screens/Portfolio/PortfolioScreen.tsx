@@ -1,380 +1,280 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, FlatList, RefreshControl, TouchableOpacity, Alert, StyleSheet } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+// app/(app)/profile.tsx
+import React, { useEffect, useState } from "react";
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { router } from "expo-router";
+import { supabase } from "src/initSupabase";
 import {
   Appbar,
   Text,
-  Card,
   Button,
+  TextInput,
   Surface,
   useTheme,
-  IconButton,
-  Divider,
-  ActivityIndicator
+  List,
+  Divider
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { 
-  portfolioManager, 
-  PortfolioItem,
-  deletePortfolioItem 
-} from "../services/portfolioService";
-import { fetchMarketStatus } from '../services/polygonService';
-import { MainStackParamList } from "../../types/navigation";
-import { useAppTheme } from "../../provider/ThemeProvider";
+import { useAppTheme } from "src/provider/ThemeProvider";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import WebSocketStatus from "src/components/WebSocketStatus";
+import { polygonWebSocketService, ConnectionState } from "src/screens/services/polygonWebSocketService";
 
-export default function PortfolioScreen() {
-  const { isDarkMode, toggleTheme } = useAppTheme();
+export default function Profile() {
   const paperTheme = useTheme();
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
-  const [summary, setSummary] = useState({
-    totalValue: 0,
-    totalCost: 0,
-    totalProfit: 0,
-    totalProfitPercent: 0
-  });
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
-
+  const { isDarkMode, toggleTheme } = useAppTheme();
+  const [contributionAmount, setContributionAmount] = useState("777");
+  const [targetDate, setTargetDate] = useState("2025-12-31");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showWebSocketStatus, setShowWebSocketStatus] = useState(true);
+  
+  // Fetch user email when component mounts
   useEffect(() => {
-    // Initialize portfolio manager
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        await portfolioManager.initialize();
-        setLoading(false);
-      } catch (error) {
-        console.error("Error initializing portfolio:", error);
-        setLoading(false);
-        Alert.alert("Error", "Failed to load portfolio data");
-      }
-    };
-
-    initialize();
-
-    // Subscribe to portfolio updates
-    const unsubscribe = portfolioManager.subscribe((items) => {
-      setPortfolio(items);
-      
-      const summaryData = portfolioManager.getPortfolioSummary();
-      setSummary({
-        totalValue: summaryData.totalValue,
-        totalCost: summaryData.totalCost,
-        totalProfit: summaryData.totalProfit,
-        totalProfitPercent: summaryData.totalProfitPercent
-      });
-    });
-    
-    // Automatically refresh data every 5 minutes when market is open
-    // This ensures our WebSocket data stays in sync even if we miss updates
-    let refreshInterval: NodeJS.Timeout | null = null;
-    
-    const setupRefreshInterval = async () => {
-      try {
-        const marketStatus = await fetchMarketStatus();
-        
-        if (marketStatus.isOpen) {
-          refreshInterval = setInterval(() => {
-            portfolioManager.refreshData();
-          }, 5 * 60 * 1000); // 5 minutes
-        }
-      } catch (error) {
-        console.error("Error checking market status:", error);
-      }
+    const getUserEmail = async () => {
+      const { data } = await supabase.auth.getSession();
+      setUserEmail(data.session?.user?.email || null);
     };
     
-    setupRefreshInterval();
-
-    // Cleanup on unmount
-    return () => {
-      unsubscribe();
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    };
+    getUserEmail();
   }, []);
+  
+  // Example monthly contributions data
+  const [monthlyContributions, setMonthlyContributions] = useState([
+    { date: "2024-01-01", amount: 777, status: "completed" },
+    { date: "2024-02-01", amount: 777, status: "completed" },
+    { date: "2024-03-01", amount: 777, status: "completed" },
+    { date: "2024-04-01", amount: 777, status: "upcoming" },
+    { date: "2024-05-01", amount: 777, status: "upcoming" },
+  ]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await portfolioManager.initialize();
-    } catch (error) {
-      console.error("Error refreshing portfolio:", error);
-      Alert.alert("Error", "Failed to refresh portfolio data");
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  const handleAddStock = () => {
-    navigation.navigate("AddStock");
+  const addContribution = () => {
+    Alert.alert("Success", "New contribution added to your plan");
   };
 
-  const handleEditStock = (item: PortfolioItem) => {
-    navigation.navigate("EditStock", { item });
+  const markAsCompleted = (index: number) => {
+    const updatedContributions = [...monthlyContributions];
+    updatedContributions[index].status = "completed";
+    setMonthlyContributions(updatedContributions);
   };
 
-  const handleDeleteStock = async (id?: string) => {
-    if (!id) return;
+  const totalContributed = monthlyContributions
+    .filter(item => item.status === "completed")
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const remainingMonths = monthlyContributions
+    .filter(item => item.status === "upcoming").length;
     
-    Alert.alert(
-      "Delete Stock",
-      "Are you sure you want to delete this stock from your portfolio?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await portfolioManager.deleteItem(id);
-            } catch (error) {
-              console.error("Error deleting stock:", error);
-              Alert.alert("Error", "Failed to delete stock");
-            }
-          }
-        }
-      ]
-    );
+  // Navigate to WebSocket settings
+  const goToWebSocketSettings = () => {
+    router.push('/websocket-settings');
   };
-
-  const handleViewOptions = (symbol: string) => {
-    navigation.navigate("OptionsChain", { symbol });
-  };
-
-  const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => {
-    const isProfitable = (item.profit_loss_percent || 0) >= 0;
-    
-    return (
-      <TouchableOpacity
-        onPress={() => handleEditStock(item)}
-        onLongPress={() => handleDeleteStock(item.id)}
-        style={styles.itemContainer}
-      >
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <Text variant="titleLarge">{item.symbol}</Text>
-              <IconButton
-                icon="chart-line-variant"
-                size={20}
-                onPress={() => handleViewOptions(item.symbol)}
-              />
-            </View>
-            
-            <Divider style={styles.divider} />
-            
-            <View style={styles.cardRow}>
-              <Text variant="bodyMedium">{item.shares} shares @ ${item.avg_price.toFixed(2)}</Text>
-              <Text variant="bodyMedium">${item.current_price?.toFixed(2) || "N/A"}</Text>
-            </View>
-            
-            <View style={styles.cardRow}>
-              <Text variant="bodyMedium">Value: ${item.value?.toFixed(2) || "N/A"}</Text>
-              <Text
-                variant="bodyMedium"
-                style={{
-                  color: isProfitable ? paperTheme.colors.primary : paperTheme.colors.error,
-                }}
-              >
-                {isProfitable ? "+" : ""}{item.profit_loss_percent?.toFixed(2)}% (${item.profit_loss?.toFixed(2)})
-              </Text>
-            </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
-    );
-  };
-
-  // Generate some sample data before user adds their own stocks
-  const getSampleData = () => {
-    return [
-      {
-        symbol: "RXRX",
-        shares: 100,
-        avg_price: 15.75,
-        current_price: 16.25,
-        value: 1625,
-        cost_basis: 1575,
-        profit_loss: 50,
-        profit_loss_percent: 3.17
-      },
-      {
-        symbol: "ACHR",
-        shares: 100,
-        avg_price: 12.33,
-        current_price: 13.45,
-        value: 1345,
-        cost_basis: 1233,
-        profit_loss: 112,
-        profit_loss_percent: 9.08
-      },
-      {
-        symbol: "HOOD",
-        shares: 80,
-        avg_price: 22.14,
-        current_price: 21.75,
-        value: 1740,
-        cost_basis: 1771.20,
-        profit_loss: -31.20,
-        profit_loss_percent: -1.76
-      }
-    ];
-  };
-
-  const displayedPortfolio = portfolio.length > 0 ? portfolio : getSampleData();
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Appbar.Header>
-          <Appbar.Content title="Portfolio" />
-          <Appbar.Action 
-            icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
-            onPress={toggleTheme} 
-          />
-        </Appbar.Header>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={paperTheme.colors.primary} />
-          <Text variant="bodyMedium" style={{ marginTop: 16 }}>Loading portfolio data...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <Appbar.Header>
-        <Appbar.Content title="Portfolio" />
-        <Appbar.Action 
-          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
-          onPress={toggleTheme} 
+        <Appbar.Content title="Profile & Investment Plan" />
+        <Appbar.Action
+          icon={isDarkMode ? "white-balance-sunny" : "weather-night"}
+          onPress={toggleTheme}
         />
       </Appbar.Header>
+      
+      <ScrollView style={{ flex: 1 }}>
+        <View style={styles.container}>
+          <Surface style={styles.section} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Account Information</Text>
+            
+            <View style={styles.profileInfo}>
+              <View style={styles.profileAvatar}>
+                <MaterialCommunityIcons
+                  name="account-circle"
+                  size={80}
+                  color={paperTheme.colors.primary}
+                />
+              </View>
+              
+              <View style={styles.profileDetails}>
+                <Text variant="titleMedium">
+                  {userEmail || "User"}
+                </Text>
+                <Text variant="bodySmall" style={{ marginTop: 5 }}>
+                  Member since {new Date().toLocaleDateString()}
+                </Text>
+                <Text variant="bodySmall" style={{ marginTop: 5 }}>
+                  Roth IRA
+                </Text>
+              </View>
+            </View>
+          </Surface>
 
-      <View style={styles.content}>
-        <Surface style={styles.summaryCard} elevation={1}>
-          <View style={styles.summaryRow}>
-            <Text variant="titleMedium">Total Value</Text>
-            <Text variant="titleMedium">${summary.totalValue.toFixed(2)}</Text>
-          </View>
+          <Surface style={styles.section} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Investment Plan</Text>
+            
+            <View style={styles.planStats}>
+              <View style={styles.statBox}>
+                <Text variant="labelLarge">Monthly</Text>
+                <Text variant="headlineSmall">${contributionAmount}</Text>
+              </View>
+              
+              <View style={styles.statBox}>
+                <Text variant="labelLarge">Contributed</Text>
+                <Text variant="headlineSmall">${totalContributed}</Text>
+              </View>
+              
+              <View style={styles.statBox}>
+                <Text variant="labelLarge">Remaining</Text>
+                <Text variant="headlineSmall">{remainingMonths} months</Text>
+              </View>
+            </View>
+
+            <View style={styles.planSettings}>
+              <View style={{ marginBottom: 15 }}>
+                <Text variant="bodyMedium" style={{ marginBottom: 5 }}>Contribution Amount</Text>
+                <TextInput
+                  mode="outlined"
+                  label="Monthly contribution"
+                  value={contributionAmount}
+                  onChangeText={setContributionAmount}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              
+              <View style={{ marginBottom: 15 }}>
+                <Text variant="bodyMedium" style={{ marginBottom: 5 }}>Target End Date</Text>
+                <TextInput
+                  mode="outlined"
+                  label="Target date (YYYY-MM-DD)"
+                  value={targetDate}
+                  onChangeText={setTargetDate}
+                />
+              </View>
+              
+              <Button
+                mode="contained"
+                onPress={() => Alert.alert("Success", "Investment plan updated")}
+                style={{ marginTop: 10 }}
+              >
+                Update Plan
+              </Button>
+            </View>
+          </Surface>
           
-          <View style={styles.summaryRow}>
-            <Text variant="bodyMedium">Cost Basis</Text>
-            <Text variant="bodyMedium">${summary.totalCost.toFixed(2)}</Text>
-          </View>
-          
-          <View style={styles.summaryRow}>
-            <Text variant="bodyMedium">Profit/Loss</Text>
-            <Text
-              variant="bodyMedium"
-              style={{
-                color: summary.totalProfit >= 0 ? paperTheme.colors.primary : paperTheme.colors.error,
-              }}
-            >
-              {summary.totalProfit >= 0 ? "+" : ""}{summary.totalProfitPercent.toFixed(2)}% (${summary.totalProfit.toFixed(2)})
-            </Text>
-          </View>
-        </Surface>
-
-        <View style={styles.holdingsHeader}>
-          <Text variant="titleLarge">Holdings</Text>
-          <Button
-            mode="contained"
-            onPress={handleAddStock}
-            icon="plus"
-          >
-            Add Stock
-          </Button>
-        </View>
-
-        <FlatList
-          data={displayedPortfolio}
-          renderItem={renderPortfolioItem}
-          keyExtractor={(item) => item.id || item.symbol}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[paperTheme.colors.primary]}
-              tintColor={paperTheme.colors.primary}
+          {/* WebSocket Status Section */}
+          <Surface style={styles.section} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Data Connection</Text>
+            
+            {showWebSocketStatus && <WebSocketStatus showDetails={false} />}
+            
+            <List.Item
+              title="Real-time Data Settings"
+              description="Configure WebSocket connection preferences"
+              left={props => <List.Icon {...props} icon="access-point" />}
+              right={props => <List.Icon {...props} icon="chevron-right" />}
+              onPress={goToWebSocketSettings}
             />
-          }
-        />
+            
+            <Divider style={{ marginVertical: 8 }} />
+            
+            <List.Item
+              title="API Usage"
+              description={`Current month: ${Math.floor(Math.random() * 80) + 20}/5000 calls`}
+              left={props => <List.Icon {...props} icon="api" />}
+            />
+          </Surface>
 
-        {portfolio.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text variant="bodyMedium" style={styles.emptyText}>
-              Sample data shown. Add your own stocks to get started.
-            </Text>
-          </View>
-        )}
-      </View>
+          <Surface style={[styles.section, { marginBottom: 30 }]} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Contribution Schedule</Text>
+            
+            <View style={styles.contributionList}>
+              {monthlyContributions.map((contribution, index) => (
+                <View key={index} style={styles.contributionItem}>
+                  <View>
+                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>
+                      {new Date(contribution.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}
+                    </Text>
+                    <Text variant="bodySmall">${contribution.amount}</Text>
+                  </View>
+                  
+                  {contribution.status === "completed" ? (
+                    <View style={[styles.badge, { backgroundColor: paperTheme.colors.primary }]}>
+                      <Text variant="labelSmall" style={{ color: "white" }}>Completed</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.badge, { backgroundColor: paperTheme.colors.secondary }]}
+                      onPress={() => markAsCompleted(index)}
+                    >
+                      <Text variant="labelSmall" style={{ color: "white" }}>Mark as Completed</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+            
+            <Button
+              mode="outlined"
+              onPress={addContribution}
+              style={{ marginTop: 15 }}
+            >
+              Add New Contribution
+            </Button>
+          </Surface>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryCard: {
     padding: 16,
-    marginTop: 16,
+  },
+  section: {
+    padding: 16,
     borderRadius: 8,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  holdingsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 24,
     marginBottom: 16,
   },
-  listContainer: {
-    paddingBottom: 16,
+  sectionTitle: {
+    marginBottom: 16,
   },
-  itemContainer: {
-    marginBottom: 12,
-  },
-  card: {
-    borderRadius: 8,
-  },
-  cardHeader: {
+  profileInfo: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
   },
-  divider: {
-    marginVertical: 8,
+  profileAvatar: {
+    marginRight: 20,
   },
-  cardRow: {
+  profileDetails: {
+    flex: 1,
+  },
+  planStats: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  statBox: {
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    minWidth: "30%",
+  },
+  planSettings: {
+    marginTop: 16,
+  },
+  contributionList: {
     marginTop: 8,
   },
-  emptyState: {
+  contributionItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 24,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.1)",
   },
-  emptyText: {
-    fontStyle: "italic",
-    opacity: 0.7,
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
 });

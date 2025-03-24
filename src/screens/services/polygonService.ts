@@ -1,43 +1,22 @@
-// src/screens/services/polygonWebSocketService.ts
+// src/screens/services/polygonService.ts
 import { POLYGON_API_KEY } from '@env';
-import axios from 'axios';
+import { restClient } from '@polygon.io/client-js';
+import { polygonWebSocketService, ConnectionState, Market } from './polygonWebSocketService';
 
-// Simple EventEmitter implementation for React Native
-class SimpleEventEmitter {
-  private listeners: Record<string, Function[]> = {};
+// Initialize the Polygon.io REST client
+const polygonRest = restClient(POLYGON_API_KEY);
 
-  on(event: string, callback: Function): void {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(callback);
-  }
+// Price cache to minimize API calls
+const priceCache: Record<string, {
+  price: number;
+  timestamp: number;
+  expiresAt: number;
+}> = {};
 
-  off(event: string, callback: Function): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event] = this.listeners[event].filter(
-      listener => listener !== callback
-    );
-  }
+// Cache expiration time (5 minutes)
+const CACHE_EXPIRATION = 5 * 60 * 1000;
 
-  emit(event: string, ...args: any[]): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event].forEach(callback => {
-      try {
-        callback(...args);
-      } catch (error) {
-        console.error(`Error in ${event} event handler:`, error);
-      }
-    });
-  }
-
-  // Helper to increase max listeners count (stub for compatibility)
-  setMaxListeners(n: number): void {
-    // Not needed in our simple implementation
-  }
-}
-
-// Types
+// Types for stock data
 export interface StockData {
   ticker: string;
   name?: string;
@@ -47,6 +26,7 @@ export interface StockData {
   changePercent: number;
 }
 
+// Types for option data
 export interface OptionGreeks {
   delta: number;
   gamma: number;
@@ -70,484 +50,256 @@ export interface OptionData {
   greeks: OptionGreeks;
 }
 
-// Define the MarketStatus interface
-export interface MarketStatus {
-  market: string;
-  serverTime: string;
-  exchanges: {
-    nyse: string;
-    nasdaq: string;
-    otc: string;
-  };
-  currencies: {
-    fx: string;
-    crypto: string;
-  };
-  isOpen: boolean;
-  nextOpenDate: string;
-  nextCloseDate: string;
-}
-
-// Market status cache to reduce REST calls
-let cachedMarketStatus: MarketStatus | null = null;
-let marketStatusExpiry: number = 0;
-const MARKET_STATUS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-// Extended WebSocket class that handles reconnects and message handling
-class PolygonWebSocketManager {
-  private ws: WebSocket | null = null;
-  private readonly apiKey: string;
-  private isConnected: boolean = false;
-  private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 5;
-  private reconnectTimeout: any = null;
-  private subscriptions: Set<string> = new Set();
-  public events: SimpleEventEmitter = new SimpleEventEmitter();
-  // New property to track last heartbeat
-  private lastHeartbeat: number = 0;
-  private heartbeatInterval: any = null;
-  
-  constructor() {
-    this.apiKey = POLYGON_API_KEY;
-    // Set max listeners (no-op in our implementation but kept for API compatibility)
-    this.events.setMaxListeners(100);
-  }
-
-  // Connect to Polygon.io WebSocket
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.isConnected && this.ws) {
-        resolve();
-        return;
-      }
-
-      try {
-        // Using React Native compatible WebSocket
-        this.ws = new WebSocket(`wss://socket.polygon.io/stocks`);
-
-        this.ws.onopen = () => {
-          console.log('WebSocket connection established with Polygon.io');
-          this.isConnected = true;
-          this.reconnectAttempts = 0;
-          
-          // Authenticate
-          this.authenticate();
-          
-          // Resubscribe to previous channels if any
-          this.resubscribe();
-          
-          // Setup heartbeat checking
-          this.setupHeartbeat();
-          
-          resolve();
-        };
-
-        this.ws.onclose = (event) => {
-          console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
-          this.isConnected = false;
-          this.cleanupHeartbeat();
-          this.handleReconnect();
-        };
-
-        this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          if (!this.isConnected) {
-            reject(error);
-          }
-        };
-
-        this.ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            // Update heartbeat timestamp
-            this.lastHeartbeat = Date.now();
-            this.handleMessage(data);
-          } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-          }
-        };
-      } catch (error) {
-        console.error('Error creating WebSocket connection:', error);
-        reject(error);
-      }
-    });
-  }
-
-  // Authenticate with API key
-  private authenticate(): void {
-    // Check if the WebSocket is open - use 1 for OPEN in React Native WebSocket
-    if (!this.ws || this.ws.readyState !== 1) return;
-    
-    this.ws.send(JSON.stringify({
-      action: 'auth',
-      params: this.apiKey
-    }));
-  }
-
-  // Handle reconnection logic
-  private handleReconnect(): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      // Exponential backoff with jitter to prevent thundering herd problem
-      const baseDelay = 1000 * Math.pow(2, this.reconnectAttempts);
-      const jitter = Math.random() * 1000; // Add up to 1 second of jitter
-      const delay = Math.min(baseDelay + jitter, 30000);
-      
-      console.log(`Attempting to reconnect in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})`);
-      
-      // Use setTimeout directly rather than a property to avoid any potential memory leaks
-      this.reconnectTimeout = setTimeout(() => {
-        this.reconnectTimeout = null;
-        this.connect().catch(error => {
-          console.error('Reconnection failed:', error);
-          // Immediately try to reconnect again
-          this.handleReconnect();
-        });
-      }, delay);
-    } else {
-      console.error('Max reconnection attempts reached');
-      this.events.emit('max_reconnect_attempts');
-      
-      // Reset reconnect attempts after a longer delay to try again
-      setTimeout(() => {
-        this.reconnectAttempts = 0;
-        this.handleReconnect();
-      }, 60000); // Try again after 1 minute
-    }
-  }
-
-  // Handle incoming messages
-  private handleMessage(message: any): void {
-    // Handle authentication response
-    if (message.ev === 'status') {
-      this.lastHeartbeat = Date.now(); // Update heartbeat on status messages
-      
-      if (message.status === 'auth_success') {
-        console.log('Successfully authenticated with Polygon.io');
-        this.events.emit('authenticated');
-      } else if (message.status === 'auth_failed') {
-        console.error('Authentication failed:', message.message);
-        this.events.emit('auth_failed', message.message);
-      }
-      return;
-    }
-    
-    // Handle heartbeat message from Polygon
-    if (message.ev === 'heartbeat' || message.type === 'heartbeat') {
-      this.lastHeartbeat = Date.now();
-      // Don't forward heartbeat messages to subscribers
-      return;
-    }
-
-    // Forward the message to event listeners
-    if (message.ev) {
-      this.events.emit(message.ev, message);
-      // Also emit ticker-specific events
-      if (message.sym) {
-        this.events.emit(`${message.ev}.${message.sym}`, message);
-      }
-    }
-  }
-
-  // Setup heartbeat monitoring
-  private setupHeartbeat(): void {
-    this.lastHeartbeat = Date.now();
-    
-    // Clear any existing interval
-    this.cleanupHeartbeat();
-    
-    // Check for heartbeats every 30 seconds
-    this.heartbeatInterval = setInterval(() => {
-      const now = Date.now();
-      // If no heartbeat in 2 minutes, reconnect
-      if (now - this.lastHeartbeat > 2 * 60 * 1000) {
-        console.log('No heartbeat received for 2 minutes, reconnecting...');
-        this.cleanupHeartbeat();
-        if (this.ws) {
-          this.ws.close();
-        }
-      }
-    }, 30 * 1000);
-  }
-
-  // Clean up heartbeat monitoring
-  private cleanupHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-  }
-
-  // Subscribe to a specific ticker
-  subscribe(channel: string, ticker: string): void {
-    // React Native WebSocket states: 0 = CONNECTING, 1 = OPEN, 2 = CLOSING, 3 = CLOSED
-    if (!this.ws || this.ws.readyState !== 1) { // 1 = OPEN
-      // Add to subscriptions set to resubscribe when connection is established
-      this.subscriptions.add(`${channel}.${ticker}`);
-      
-      // Try to connect if not already connecting
-      if (!this.isConnected && (!this.ws || this.ws.readyState !== 0)) { // 0 = CONNECTING
-        this.connect().catch(error => {
-          console.error('Connection failed:', error);
-        });
-      }
-      return;
-    }
-
-    this.subscriptions.add(`${channel}.${ticker}`);
-    
-    this.ws.send(JSON.stringify({
-      action: 'subscribe',
-      params: `${channel}.${ticker}`
-    }));
-  }
-
-  // Unsubscribe from a specific ticker
-  unsubscribe(channel: string, ticker: string): void {
-    if (!this.ws || this.ws.readyState !== 1) return; // 1 = OPEN
-    
-    const subscriptionKey = `${channel}.${ticker}`;
-    this.subscriptions.delete(subscriptionKey);
-    
-    this.ws.send(JSON.stringify({
-      action: 'unsubscribe',
-      params: subscriptionKey
-    }));
-  }
-
-  // Resubscribe to all previous subscriptions
-  private resubscribe(): void {
-    if (!this.ws || this.ws.readyState !== 1) return; // 1 = OPEN
-    
-    if (this.subscriptions.size > 0) {
-      this.ws.send(JSON.stringify({
-        action: 'subscribe',
-        params: Array.from(this.subscriptions).join(',')
-      }));
-    }
-  }
-
-  // Disconnect WebSocket
-  disconnect(): void {
-    this.cleanupHeartbeat();
-    
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-      this.isConnected = false;
-      this.subscriptions.clear();
-      
-      if (this.reconnectTimeout) {
-        clearTimeout(this.reconnectTimeout);
-        this.reconnectTimeout = null;
-      }
-    }
-  }
-}
-
-// Singleton instance
-const wsManager = new PolygonWebSocketManager();
-
-// Real-time stock price with WebSocket
-export const subscribeToStockPrice = async (
-  symbol: string, 
-  callback: (data: StockData) => void
-): Promise<() => void> => {
+// Function to fetch current stock price
+export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
   try {
-    // Ensure connection is established
-    await wsManager.connect();
+    const symbolUpper = symbol.toUpperCase();
     
-    // Create handler for ticker events
-    const handleUpdate = (data: any) => {
-      // For T (trade) events
-      if (data.p && data.o) {
-        const change = data.p - data.o;
-        const changePercent = (change / data.o) * 100;
-
-        const stockData: StockData = {
-          ticker: symbol,
-          currentPrice: data.p,
-          previousClose: data.o,
-          change,
-          changePercent
+    // 1. First try: Check if we have real-time data from WebSocket
+    if (polygonWebSocketService.getConnectionState(Market.STOCKS) === ConnectionState.CONNECTED) {
+      // Subscribe to updates if not already subscribed
+      polygonWebSocketService.subscribeStock(symbolUpper);
+      
+      // Try to get the current price from the WebSocket service
+      const realtimePrice = polygonWebSocketService.getStockPrice(symbolUpper);
+      
+      if (realtimePrice !== null) {
+        // Update cache
+        priceCache[symbolUpper] = {
+          price: realtimePrice,
+          timestamp: Date.now(),
+          expiresAt: Date.now() + CACHE_EXPIRATION
         };
-
-        callback(stockData);
+        
+        // Create return object (with estimated previous close)
+        return {
+          ticker: symbolUpper,
+          currentPrice: realtimePrice,
+          previousClose: realtimePrice * 0.995, // Estimate, replace with actual data if needed
+          change: realtimePrice * 0.005,
+          changePercent: 0.5
+        };
       }
-    };
+    }
 
-    // Subscribe to ticker
-    wsManager.subscribe('T', symbol);
+    // 2. Second try: Check cache
+    const cachedData = priceCache[symbolUpper];
+    if (cachedData && cachedData.expiresAt > Date.now()) {
+      // Subscribe for future updates if we're online
+      if (polygonWebSocketService.getConnectionState() === ConnectionState.CONNECTED) {
+        polygonWebSocketService.subscribe(symbolUpper);
+      }
+      
+      return {
+        ticker: symbolUpper,
+        currentPrice: cachedData.price,
+        previousClose: cachedData.price * 0.995, // Estimate, replace with actual data if needed
+        change: cachedData.price * 0.005,
+        changePercent: 0.5
+      };
+    }
+
+    // 3. Third try: Fallback to REST API with exponential backoff
+    let attempts = 0;
+    const maxAttempts = 3;
     
-    // Listen for updates
-    wsManager.events.on(`T.${symbol}`, handleUpdate);
+    while (attempts < maxAttempts) {
+      try {
+        // Use the Polygon.io client library
+        const response = await polygonRest.stocks.previousClose(symbolUpper);
+        
+        if (response.results && response.results.length > 0) {
+          const result = response.results[0];
+          const change = (result.c ?? 0) - (result.o ?? 0);
+          const changePercent = (change / (result.o ?? 1)) * 100;
+
+          // Update cache
+          priceCache[symbolUpper] = {
+            price: result.c ?? 0,
+            timestamp: Date.now(),
+            expiresAt: Date.now() + CACHE_EXPIRATION
+          };
+
+          // Subscribe to this symbol for future updates via WebSocket
+          if (polygonWebSocketService.getConnectionState() === ConnectionState.CONNECTED) {
+            polygonWebSocketService.subscribe(symbolUpper);
+          } else if (polygonWebSocketService.getConnectionState() === ConnectionState.DISCONNECTED) {
+            // Try to connect if disconnected
+            polygonWebSocketService.connect();
+            // Then subscribe
+            polygonWebSocketService.subscribe(symbolUpper);
+          }
+
+          return {
+            ticker: symbolUpper,
+            currentPrice: result.c ?? 0,
+            previousClose: result.o ?? 0,
+            change,
+            changePercent
+          };
+        }
+        
+        // If we got here, no results were found
+        break;
+      } catch (error) {
+        attempts++;
+        
+        if (attempts >= maxAttempts) {
+          // Let the outer catch block handle this
+          throw error;
+        }
+        
+        // Exponential backoff delay
+        const delay = Math.pow(2, attempts) * 1000;
+        console.log(`Retrying fetchStockPrice for ${symbolUpper} in ${delay}ms (attempt ${attempts})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
     
-    // Return unsubscribe function
-    return () => {
-      wsManager.events.off(`T.${symbol}`, handleUpdate);
-      wsManager.unsubscribe('T', symbol);
-    };
+    // 4. Final try: Use expired cache as last resort
+    const expiredCache = priceCache[symbolUpper];
+    if (expiredCache) {
+      console.log(`Using expired cache data for ${symbolUpper} from ${new Date(expiredCache.timestamp).toLocaleTimeString()}`);
+      return {
+        ticker: symbolUpper,
+        currentPrice: expiredCache.price,
+        previousClose: expiredCache.price * 0.995, // Estimate
+        change: expiredCache.price * 0.005,
+        changePercent: 0.5
+      };
+    }
+    
+    throw new Error('No data available');
   } catch (error) {
-    console.error(`Error subscribing to ${symbol}:`, error);
+    console.error(`Error fetching stock price for ${symbol}:`, error);
     throw error;
   }
 };
 
-// Get stock price initially (we'll still need this for the first load)
-export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
-  return new Promise((resolve, reject) => {
-    let timeout: NodeJS.Timeout | null = null;
-    let resolved = false;
-    
-    // Set a timeout in case we don't get data in reasonable time
-    timeout = setTimeout(() => {
-      if (!resolved) {
-        wsManager.events.off(`T.${symbol}`, handleFirstTrade);
-        reject(new Error('Timeout waiting for stock price data'));
+// Function to fetch prices for multiple stocks in a single batch
+export const fetchStockPrices = async (symbols: string[]): Promise<Record<string, StockData>> => {
+  if (!symbols || symbols.length === 0) {
+    return {};
+  }
+  
+  // Ensure symbols are uppercase
+  const upperSymbols = symbols.map(s => s.toUpperCase());
+  
+  // Subscribe all symbols to WebSocket for future updates
+  if (polygonWebSocketService.getConnectionState(Market.STOCKS) === ConnectionState.CONNECTED) {
+    upperSymbols.forEach(symbol => polygonWebSocketService.subscribeStock(symbol));
+  } else if (polygonWebSocketService.getConnectionState(Market.STOCKS) === ConnectionState.DISCONNECTED) {
+    // Try to connect if disconnected
+    polygonWebSocketService.connect(Market.STOCKS);
+    upperSymbols.forEach(symbol => polygonWebSocketService.subscribeStock(symbol));
+  }
+  
+  // Execute all fetch operations in parallel with fallback strategies
+  const results = await Promise.all(
+    upperSymbols.map(async (symbol) => {
+      try {
+        const data = await fetchStockPrice(symbol);
+        return { symbol, data, error: null };
+      } catch (error) {
+        console.error(`Error fetching data for ${symbol}:`, error);
+        return { symbol, data: null, error };
       }
-    }, 10000); // 10 second timeout
+    })
+  );
+  
+  // Convert array of results to object keyed by symbol
+  const stockDataMap: Record<string, StockData> = {};
+  
+  results.forEach(result => {
+    if (result.data) {
+      stockDataMap[result.symbol] = result.data;
+    }
+  });
+  
+  return stockDataMap;
+};
+
+// Function to batch update portfolio items with current prices
+export const batchUpdatePortfolioPrices = async (portfolioItems: any[]): Promise<any[]> => {
+  if (!portfolioItems || portfolioItems.length === 0) {
+    return [];
+  }
+  
+  // Extract unique symbols
+  const symbols = [...new Set(portfolioItems.map(item => item.symbol))];
+  
+  // Fetch all prices in one batch
+  const priceData = await fetchStockPrices(symbols);
+  
+  // Update portfolio items with the price data
+  return portfolioItems.map(item => {
+    const stockData = priceData[item.symbol];
     
-    // Handle the first trade event
-    const handleFirstTrade = (data: any) => {
-      if (data.p && data.o) {
-        const change = data.p - data.o;
-        const changePercent = (change / data.o) * 100;
-        
-        const stockData: StockData = {
-          ticker: symbol,
-          currentPrice: data.p,
-          previousClose: data.o,
-          change,
-          changePercent
-        };
-        
-        wsManager.events.off(`T.${symbol}`, handleFirstTrade);
-        
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = null;
-        }
-        
-        resolved = true;
-        resolve(stockData);
-      }
-    };
+    if (stockData) {
+      const currentPrice = stockData.currentPrice;
+      const value = currentPrice * item.shares;
+      const cost_basis = item.avg_price * item.shares;
+      const profit_loss = value - cost_basis;
+      const profit_loss_percent = (profit_loss / cost_basis) * 100;
+      
+      return {
+        ...item,
+        current_price: currentPrice,
+        value,
+        cost_basis,
+        profit_loss,
+        profit_loss_percent
+      };
+    }
     
-    // Subscribe and listen for data
-    wsManager.connect()
-      .then(() => {
-        wsManager.subscribe('T', symbol);
-        wsManager.events.on(`T.${symbol}`, handleFirstTrade);
-      })
-      .catch(error => {
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = null;
-        }
-        reject(error);
-      });
+    return item;
   });
 };
 
-// Function to fetch current market status
-export const fetchMarketStatus = async (): Promise<MarketStatus> => {
-  // Check cache first to avoid unnecessary REST calls
-  const now = Date.now();
-  if (cachedMarketStatus && marketStatusExpiry > now) {
-    return cachedMarketStatus;
+// Function to batch update options with current prices
+export const batchUpdateOptionPrices = async (optionItems: any[]): Promise<any[]> => {
+  if (!optionItems || optionItems.length === 0) {
+    return [];
   }
   
-  try {
-    const response = await axios.get(
-      `https://api.polygon.io/v1/marketstatus/now`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
-      }
-    );
-
-    const data = response.data;
-    
-    // Transform the API response into our MarketStatus interface
-    const marketStatus: MarketStatus = {
-      market: data.market,
-      serverTime: data.serverTime,
-      exchanges: {
-        nyse: data.exchanges.nyse,
-        nasdaq: data.exchanges.nasdaq,
-        otc: data.exchanges.otc,
-      },
-      currencies: {
-        fx: data.currencies.fx,
-        crypto: data.currencies.crypto,
-      },
-      isOpen: 
-        data.exchanges.nyse === 'open' || 
-        data.exchanges.nasdaq === 'open',
-      nextOpenDate: data.nextOpen,
-      nextCloseDate: data.nextClose
-    };
-    
-    // Cache the result
-    cachedMarketStatus = marketStatus;
-    
-    // Set expiry - shorter if market is open, longer if closed
-    const isOpen = marketStatus.isOpen;
-    marketStatusExpiry = now + (isOpen ? 
-      MARKET_STATUS_CACHE_DURATION : // 5 mins if market is open
-      60 * 60 * 1000); // 1 hour if market is closed
-    
-    return marketStatus;
-  } catch (error) {
-    console.error('Error fetching market status:', error);
-    
-    // Return cached data if available, even if expired
-    if (cachedMarketStatus) {
-      return cachedMarketStatus;
-    }
-    
-    // Return default values if there's an error and no cache
-    return {
-      market: 'unknown',
-      serverTime: new Date().toISOString(),
-      exchanges: {
-        nyse: 'unknown',
-        nasdaq: 'unknown',
-        otc: 'unknown'
-      },
-      currencies: {
-        fx: 'unknown',
-        crypto: 'unknown'
-      },
-      isOpen: false,
-      nextOpenDate: '',
-      nextCloseDate: ''
-    };
+  // Connect to options WebSocket if not already connected
+  if (polygonWebSocketService.getConnectionState(Market.OPTIONS) === ConnectionState.DISCONNECTED) {
+    polygonWebSocketService.connect(Market.OPTIONS);
   }
+  
+  // Process options in parallel
+  const updatedOptions = await Promise.all(optionItems.map(async (item) => {
+    try {
+      // Make sure option symbol has O: prefix
+      let optionSymbol = item.symbol;
+      if (!optionSymbol.startsWith('O:')) {
+        optionSymbol = `O:${optionSymbol}`;
+      }
+      
+      // Subscribe to this option for real-time updates
+      polygonWebSocketService.subscribeOption(optionSymbol);
+      
+      // Get current price
+      const currentPrice = polygonWebSocketService.getOptionPrice(optionSymbol);
+      
+      if (currentPrice !== null) {
+        return {
+          ...item,
+          current_price: currentPrice
+        };
+      }
+      
+      return item;
+    } catch (error) {
+      console.error(`Error updating option price for ${item.symbol}:`, error);
+      return item;
+    }
+  }));
+  
+  return updatedOptions;
 };
 
-// Options cache to reduce REST API calls
-const optionsCache = new Map<string, {
-  data: OptionData[],
-  expiry: number
-}>();
-const optionsExpirationsCache = new Map<string, {
-  data: string[],
-  expiry: number
-}>();
-
-// Options cache duration - 15 minutes during market hours, 1 hour when closed
-const getOptionsCacheDuration = async (): Promise<number> => {
-  const marketStatus = await fetchMarketStatus();
-  return marketStatus.isOpen ? 15 * 60 * 1000 : 60 * 60 * 1000;
-};
-
+// Function to fetch options data for a specific symbol
 export const fetchOptionsData = async (
   underlyingSymbol: string,
   expirationDate?: string
@@ -563,46 +315,19 @@ export const fetchOptionsData = async (
         throw new Error('No expiration dates available');
       }
     }
-    
-    // Check cache
-    const cacheKey = `${underlyingSymbol}-${expDate}`;
-    const cached = optionsCache.get(cacheKey);
-    const now = Date.now();
-    
-    if (cached && cached.expiry > now) {
-      return cached.data;
-    }
 
-    const response = await axios.get(
-      `https://api.polygon.io/v3/reference/options/contracts?underlying_ticker=${underlyingSymbol}&expiration_date=${expDate}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
-      }
-    );
+    // Use the Polygon.io client library to fetch options contracts
+    const response = await polygonRest.reference.optionsContracts({
+      underlying_ticker: underlyingSymbol,
+      expiration_date: expDate
+    });
 
-    if (response.data.results && response.data.results.length > 0) {
-      // To minimize API calls, we'll batch fetch the details for multiple options
-      // Use local price cache during processing to avoid duplicating REST calls
-      const priceCache = new Map<string, any>();
-      
-      // Process options in smaller batches to avoid overloading
-      const batchSize = 10;
-      const results = response.data.results;
-      const optionsData: OptionData[] = [];
-      
-      for (let i = 0; i < results.length; i += batchSize) {
-        const batch = results.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (option: any) => {
-          // Get option details - reuse cached data when possible
-          let details;
-          if (!priceCache.has(option.ticker)) {
-            details = await fetchOptionDetails(option.ticker);
-            priceCache.set(option.ticker, details);
-          } else {
-            details = priceCache.get(option.ticker);
-          }
+    if (response.results && response.results.length > 0) {
+      // Map API response to our OptionData interface
+      return Promise.all(
+        response.results.map(async (option: any) => {
+          // Fetch additional data like last price and greeks
+          const details = await fetchOptionDetails(option.ticker);
           
           return {
             symbol: option.ticker,
@@ -623,196 +348,96 @@ export const fetchOptionsData = async (
               vega: 0
             }
           };
-        });
-        
-        const batchResults = await Promise.all(batchPromises);
-        optionsData.push(...batchResults);
-      }
-      
-      // Cache the result
-      const cacheDuration = await getOptionsCacheDuration();
-      optionsCache.set(cacheKey, {
-        data: optionsData,
-        expiry: now + cacheDuration
-      });
-      
-      return optionsData;
+        })
+      );
     }
     
     return [];
   } catch (error) {
     console.error(`Error fetching options data for ${underlyingSymbol}:`, error);
-    
-    // Return cached data if available, even if expired
-    const cacheKey = `${underlyingSymbol}-${expirationDate}`;
-    const cached = optionsCache.get(cacheKey);
-    if (cached) {
-      return cached.data;
-    }
-    
     throw error;
   }
 };
 
-export const subscribeToOptionData = async (
-  optionSymbol: string,
-  callback: (data: Partial<OptionData>) => void
-): Promise<() => void> => {
-  try {
-    // Ensure connection is established
-    await wsManager.connect();
-    
-    // Create handler for option events
-    const handleUpdate = (data: any) => {
-      if (data.ev === 'T' && data.sym === optionSymbol) {
-        // Process option trade data
-        const optionUpdate: Partial<OptionData> = {
-          symbol: optionSymbol,
-          lastPrice: data.p || 0,
-          volume: data.s || 0
-        };
-
-        callback(optionUpdate);
-      }
-    };
-
-    // Subscribe to ticker (T channel for trades)
-    wsManager.subscribe('T', optionSymbol);
-    
-    // Listen for updates
-    wsManager.events.on(`T.${optionSymbol}`, handleUpdate);
-    
-    // Return unsubscribe function
-    return () => {
-      wsManager.events.off(`T.${optionSymbol}`, handleUpdate);
-      wsManager.unsubscribe('T', optionSymbol);
-    };
-  } catch (error) {
-    console.error(`Error subscribing to option ${optionSymbol}:`, error);
-    throw error;
-  }
-};
-
-// Fetch available option expiration dates with caching
+// Function to fetch available expiration dates for options
 export const fetchOptionsExpirations = async (
   underlyingSymbol: string
 ): Promise<string[]> => {
-  // Check cache first
-  const cacheKey = underlyingSymbol;
-  const cached = optionsExpirationsCache.get(cacheKey);
-  const now = Date.now();
-  
-  if (cached && cached.expiry > now) {
-    return cached.data;
-  }
-  
-  try {
-    const response = await axios.get(
-      `https://api.polygon.io/v3/reference/options/contracts?underlying_ticker=${underlyingSymbol}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
+  return polygonRest.reference.optionsContracts({ underlying_ticker: underlyingSymbol })
+    .then(response => {
+      if (response.results) {
+        // Extract and sort the expiration dates
+        return response.results.map((contract: any) => contract.expiration_date).sort();
       }
-    );
-
-    if (response.data.results && response.data.results.length > 0) {
-      // Extract unique expiration dates and sort them
-      const expirationDates = response.data.results
-        .map((option: any) => option.expiration_date)
-        .filter((value: string, index: number, self: string[]) => 
-          self.indexOf(value) === index
-        )
-        .sort();
-      
-      // Cache the result
-      const cacheDuration = await getOptionsCacheDuration();
-      optionsExpirationsCache.set(cacheKey, {
-        data: expirationDates,
-        expiry: now + cacheDuration
-      });
-      
-      return expirationDates;
-    }
-    
-    return [];
-  } catch (error) {
-    console.error(`Error fetching option expirations for ${underlyingSymbol}:`, error);
-    
-    // Return cached data if available, even if expired
-    if (cached) {
-      return cached.data;
-    }
-    
-    throw error;
-  }
+      return [];
+    })
+    .catch(error => {
+      console.error(`Error fetching option expirations for ${underlyingSymbol}:`, error);
+      throw error;
+    });
 };
 
-// Function to fetch details for a specific option contract with caching
-// Cache for option details to reduce API calls
-const optionDetailsCache = new Map<string, {
-  data: any,
-  expiry: number
-}>();
-
+// Function to fetch option details with WebSocket integration
 const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
-  // Check cache first
-  const cached = optionDetailsCache.get(optionSymbol);
-  const now = Date.now();
-  
-  if (cached && cached.expiry > now) {
-    return cached.data;
-  }
-  
   try {
-    // We'll use snapshot instead of individual trade/quote endpoints to reduce API calls
-    const snapshotResponse = await axios.get(
-      `https://api.polygon.io/v3/snapshot/options/${optionSymbol}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
-      }
-    );
-    
-    const snapshot = snapshotResponse.data.results;
-    
-    if (!snapshot) {
-      throw new Error('No snapshot data available');
+    // For options, we need to make sure it has the O: prefix
+    let formattedSymbol = optionSymbol.toUpperCase();
+    if (!formattedSymbol.startsWith('O:')) {
+      formattedSymbol = `O:${formattedSymbol}`;
     }
     
+    // Parse the option symbol to get the underlying asset
+    const match = formattedSymbol.match(/^O:([A-Z]+)/);
+    const underlyingAsset = match ? match[1] : '';
+    
+    if (!underlyingAsset) {
+      throw new Error(`Invalid option symbol format: ${formattedSymbol}`);
+    }
+    
+    // Step 1: Try to connect and subscribe to WebSocket for real-time updates
+    if (polygonWebSocketService.getConnectionState(Market.OPTIONS) === ConnectionState.DISCONNECTED) {
+      polygonWebSocketService.connect(Market.OPTIONS);
+    }
+    
+    // Subscribe to this option for future updates
+    polygonWebSocketService.subscribeOption(formattedSymbol);
+    
+    // Step 2: Try to get last price from WebSocket cache first
+    const lastPriceFromWS = polygonWebSocketService.getOptionPrice(formattedSymbol);
+    
+    // Step 3: Fetch snapshot from REST API for complete option data
+    const snapshotResponse = await polygonRest.options.snapshotOptionContract(
+      underlyingAsset,  // underlying asset (e.g., AAPL)
+      formattedSymbol,  // full option symbol
+      {}                // query parameters
+    );
+    
+    // Extract data from snapshot response
+    const snapshot = snapshotResponse.results;
+    
+    // Use WebSocket price if available, otherwise fallback to snapshot price
+    const lastPrice = lastPriceFromWS !== null 
+      ? lastPriceFromWS 
+      : (snapshot?.day?.close || 0);
+    
     const details = {
-      lastPrice: snapshot.last_trade?.p || 0,
-      bidPrice: snapshot.bid?.p || 0,
-      askPrice: snapshot.ask?.p || 0,
-      openInterest: snapshot.open_interest || 0,
-      volume: snapshot.day?.v || 0,
-      impliedVolatility: snapshot.implied_volatility || 0,
+      lastPrice,
+      bidPrice: snapshot?.last_quote?.bid || 0,
+      askPrice: snapshot?.last_quote?.ask || 0,
+      openInterest: snapshot?.open_interest || 0,
+      volume: snapshot?.day?.volume || 0,
+      impliedVolatility: snapshot?.implied_volatility || 0,
       greeks: {
-        delta: snapshot.greeks?.delta || 0,
-        gamma: snapshot.greeks?.gamma || 0,
-        theta: snapshot.greeks?.theta || 0,
-        vega: snapshot.greeks?.vega || 0,
-        rho: snapshot.greeks?.rho || 0
+        delta: snapshot?.greeks?.delta || 0,
+        gamma: snapshot?.greeks?.gamma || 0,
+        theta: snapshot?.greeks?.theta || 0,
+        vega: snapshot?.greeks?.vega || 0,
       }
     };
-    
-    // Cache the result
-    const cacheDuration = await getOptionsCacheDuration();
-    optionDetailsCache.set(optionSymbol, {
-      data: details,
-      expiry: now + cacheDuration
-    });
     
     return details;
   } catch (error) {
     console.error(`Error fetching option details for ${optionSymbol}:`, error);
-    
-    // Return cached data if available, even if expired
-    if (cached) {
-      return cached.data;
-    }
-    
     // Return default values if there's an error
     return {
       lastPrice: 0,
@@ -825,308 +450,8 @@ const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
         delta: 0,
         gamma: 0,
         theta: 0,
-        vega: 0,
-        rho: 0
+        vega: 0
       }
     };
   }
 };
-
-// Additional caches for the new functions
-const searchResultsCache = new Map<string, {
-  data: any[],
-  expiry: number
-}>();
-
-const companyDetailsCache = new Map<string, {
-  data: any,
-  expiry: number
-}>();
-
-const historicalPricesCache = new Map<string, {
-  data: any[],
-  expiry: number
-}>();
-
-// Cache durations
-const SEARCH_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const COMPANY_DETAILS_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
-const HISTORICAL_PRICES_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
-
-// Cache management
-export const clearCaches = () => {
-  cachedMarketStatus = null;
-  marketStatusExpiry = 0;
-  optionsCache.clear();
-  optionsExpirationsCache.clear();
-  optionDetailsCache.clear();
-  searchResultsCache.clear();
-  companyDetailsCache.clear();
-  historicalPricesCache.clear();
-};
-
-// Function to preload commonly needed data
-export const preloadCommonData = async (symbols: string[]) => {
-  try {
-    // Preload market status
-    await fetchMarketStatus();
-    
-    // Preload options expirations for common symbols
-    for (const symbol of symbols) {
-      await fetchOptionsExpirations(symbol);
-    }
-  } catch (error) {
-    console.error('Error preloading common data:', error);
-  }
-};
-
-// Search for stocks by name or symbol
-export interface StockSearchResult {
-  ticker: string;
-  name: string;
-  market: string;
-  locale: string;
-  type: string;
-  currency: string;
-  active: boolean;
-  primaryExch: string;
-  updated: string;
-}
-
-export const searchStocks = async (query: string): Promise<StockSearchResult[]> => {
-  // Check cache first
-  const cacheKey = query.toLowerCase().trim();
-  const cached = searchResultsCache.get(cacheKey);
-  const now = Date.now();
-  
-  if (cached && cached.expiry > now) {
-    return cached.data;
-  }
-  
-  try {
-    const response = await axios.get(
-      `https://api.polygon.io/v3/reference/tickers`,
-      {
-        params: {
-          search: query,
-          active: true,
-          sort: 'ticker',
-          order: 'asc',
-          limit: 20
-        },
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
-      }
-    );
-    
-    if (response.data.results && response.data.results.length > 0) {
-      const searchResults: StockSearchResult[] = response.data.results.map((item: any) => ({
-        ticker: item.ticker,
-        name: item.name,
-        market: item.market,
-        locale: item.locale,
-        type: item.type,
-        currency: item.currency,
-        active: item.active,
-        primaryExch: item.primary_exchange,
-        updated: item.last_updated_utc
-      }));
-      
-      // Cache the results
-      searchResultsCache.set(cacheKey, {
-        data: searchResults,
-        expiry: now + SEARCH_CACHE_DURATION
-      });
-      
-      return searchResults;
-    }
-    
-    return [];
-  } catch (error) {
-    console.error(`Error searching for stocks with query "${query}":`, error);
-    
-    // Return cached results if available, even if expired
-    if (cached) {
-      return cached.data;
-    }
-    
-    return [];
-  }
-};
-
-// Interface for company details
-export interface CompanyDetails {
-  ticker: string;
-  name: string;
-  description: string;
-  homepage: string;
-  employees: number;
-  industry: string;
-  sector: string;
-  marketCap: number;
-  address: {
-    address1: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  logoUrl?: string;
-  phone?: string;
-  listDate?: string;
-}
-
-// Fetch company details for a specific ticker
-export const fetchCompanyDetails = async (symbol: string): Promise<CompanyDetails | null> => {
-  // Check cache first
-  const cacheKey = symbol.toUpperCase();
-  const cached = companyDetailsCache.get(cacheKey);
-  const now = Date.now();
-  
-  if (cached && cached.expiry > now) {
-    return cached.data;
-  }
-  
-  try {
-    // First, fetch the basic ticker details
-    const response = await axios.get(
-      `https://api.polygon.io/v3/reference/tickers/${symbol}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
-      }
-    );
-    
-    if (response.data.results) {
-      const ticker = response.data.results;
-      
-      // Format the company details
-      const companyDetails: CompanyDetails = {
-        ticker: ticker.ticker,
-        name: ticker.name,
-        description: ticker.description || '',
-        homepage: ticker.homepage_url || '',
-        employees: ticker.total_employees || 0,
-        industry: ticker.sic_description || '',
-        sector: ticker.sector || '',
-        marketCap: ticker.market_cap || 0,
-        address: {
-          address1: ticker.address?.address1 || '',
-          city: ticker.address?.city || '',
-          state: ticker.address?.state || '',
-          postalCode: ticker.address?.postal_code || '',
-          country: ticker.address?.country || ''
-        },
-        logoUrl: ticker.branding?.logo_url || undefined,
-        phone: ticker.phone_number || undefined,
-        listDate: ticker.list_date || undefined
-      };
-      
-      // Cache the results
-      companyDetailsCache.set(cacheKey, {
-        data: companyDetails,
-        expiry: now + COMPANY_DETAILS_CACHE_DURATION
-      });
-      
-      return companyDetails;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error(`Error fetching company details for symbol "${symbol}":`, error);
-    
-    // Return cached results if available, even if expired
-    if (cached) {
-      return cached.data;
-    }
-    
-    return null;
-  }
-};
-
-// Interface for historical price data
-export interface HistoricalPrice {
-  timestamp: number;
-  date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  vwap?: number;
-  transactions?: number;
-}
-
-// Timespan for historical data
-export type Timespan = '1min' | '5min' | '15min' | '30min' | '1h' | '4h' | '1d' | '1w' | '1m';
-
-// Fetch historical prices
-export const fetchHistoricalPrices = async (
-  symbol: string, 
-  fromDate: string,  // Format: YYYY-MM-DD
-  toDate: string,    // Format: YYYY-MM-DD
-  timespan: Timespan = '1d'
-): Promise<HistoricalPrice[]> => {
-  // Check cache first
-  const cacheKey = `${symbol.toUpperCase()}-${fromDate}-${toDate}-${timespan}`;
-  const cached = historicalPricesCache.get(cacheKey);
-  const now = Date.now();
-  
-  if (cached && cached.expiry > now) {
-    return cached.data;
-  }
-  
-  try {
-    const response = await axios.get(
-      `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timespan}/${fromDate}/${toDate}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLYGON_API_KEY}`
-        }
-      }
-    );
-    
-    if (response.data.results && response.data.results.length > 0) {
-      const historicalPrices: HistoricalPrice[] = response.data.results.map((bar: any) => {
-        // Convert timestamp from milliseconds to ISO string date
-        const date = new Date(bar.t);
-        const dateString = date.toISOString().split('T')[0];
-        
-        return {
-          timestamp: bar.t,
-          date: dateString,
-          open: bar.o,
-          high: bar.h,
-          low: bar.l,
-          close: bar.c,
-          volume: bar.v,
-          vwap: bar.vw,
-          transactions: bar.n
-        };
-      });
-      
-      // Cache the results
-      historicalPricesCache.set(cacheKey, {
-        data: historicalPrices,
-        expiry: now + HISTORICAL_PRICES_CACHE_DURATION
-      });
-      
-      return historicalPrices;
-    }
-    
-    return [];
-  } catch (error) {
-    console.error(`Error fetching historical prices for ${symbol}:`, error);
-    
-    // Return cached results if available, even if expired
-    if (cached) {
-      return cached.data;
-    }
-    
-    return [];
-  }
-};
-
-export { wsManager };
