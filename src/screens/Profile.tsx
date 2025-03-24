@@ -1,29 +1,46 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from "react-native";
-import { MainStackParamList } from "../types/navigation";
+import { CompositeScreenProps } from "@react-navigation/native";
+import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { supabase } from "../initSupabase";
 import {
-  Layout,
+  Appbar,
   Text,
   Button,
   TextInput,
-  TopNav,
-  Section,
-  SectionContent,
+  Surface,
   useTheme,
-  themeColor,
-} from "react-native-rapi-ui";
-import { Ionicons } from "@expo/vector-icons";
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MainTabsParamList, MainStackParamList } from "../types/navigation";
+import { useAppTheme } from "../provider/ThemeProvider";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-export default function ({
-  navigation,
-}: NativeStackScreenProps<MainStackParamList, "MainTabs">) {
-  const { isDarkmode, setTheme } = useTheme();
+// Composite prop type that combines tab navigation with potential stack navigation
+type ProfileScreenProps = CompositeScreenProps<
+  BottomTabScreenProps<MainTabsParamList, "Profile">,
+  NativeStackScreenProps<MainStackParamList>
+>;
+
+const Profile = ({ navigation }: ProfileScreenProps) => {
+  const paperTheme = useTheme();
+  const { isDarkMode, toggleTheme } = useAppTheme();
   const [contributionAmount, setContributionAmount] = useState("777");
   const [targetDate, setTargetDate] = useState("2025-12-31");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   
-  // In a real app, these would be stored in the database and retrieved from there
+  // Fetch user email when component mounts
+  useEffect(() => {
+    const getUserEmail = async () => {
+      const { data } = await supabase.auth.getSession();
+      setUserEmail(data.session?.user?.email || null);
+    };
+    
+    getUserEmail();
+  }, []);
+  
+  // Example monthly contributions data
   const [monthlyContributions, setMonthlyContributions] = useState([
     { date: "2024-01-01", amount: 777, status: "completed" },
     { date: "2024-02-01", amount: 777, status: "completed" },
@@ -33,12 +50,10 @@ export default function ({
   ]);
 
   const addContribution = () => {
-    // In a real app, this would add a new contribution to the database
     Alert.alert("Success", "New contribution added to your plan");
   };
 
   const markAsCompleted = (index: number) => {
-    // In a real app, this would update the contribution status in the database
     const updatedContributions = [...monthlyContributions];
     updatedContributions[index].status = "completed";
     setMonthlyContributions(updatedContributions);
@@ -52,151 +67,149 @@ export default function ({
     .filter(item => item.status === "upcoming").length;
 
   return (
-    <Layout>
-      <TopNav
-        middleContent="Profile & Investment Plan"
-        rightContent={
-          <Ionicons
-            name={isDarkmode ? "sunny" : "moon"}
-            size={20}
-            color={isDarkmode ? themeColor.white100 : themeColor.dark}
-          />
-        }
-        rightAction={() => {
-          if (isDarkmode) {
-            setTheme("light");
-          } else {
-            setTheme("dark");
-          }
-        }}
-      />
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <Appbar.Header>
+        <Appbar.Content title="Profile & Investment Plan" />
+        <Appbar.Action
+          icon={isDarkMode ? "white-balance-sunny" : "weather-night"}
+          onPress={toggleTheme}
+        />
+      </Appbar.Header>
       
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.container}>
-          <Section>
-            <SectionContent>
-              <Text fontWeight="bold" size="h4" style={{ marginBottom: 10 }}>Account Information</Text>
-              
-              <View style={styles.profileInfo}>
-                <View style={styles.profileAvatar}>
-                  <Ionicons
-                    name="person-circle"
-                    size={80}
-                    color={isDarkmode ? themeColor.white100 : themeColor.dark}
-                  />
-                </View>
-                
-                <View style={styles.profileDetails}>
-                  <Text fontWeight="bold" size="lg">
-                    {supabase.auth.user()?.email || "User"}
-                  </Text>
-                  <Text size="sm" style={{ marginTop: 5 }}>
-                    Member since {new Date(supabase.auth.user()?.created_at || Date.now()).toLocaleDateString()}
-                  </Text>
-                  <Text size="sm" style={{ marginTop: 5 }}>
-                    Roth IRA
-                  </Text>
-                </View>
-              </View>
-            </SectionContent>
-          </Section>
-
-          <Section style={{ marginTop: 20 }}>
-            <SectionContent>
-              <Text fontWeight="bold" size="h4" style={{ marginBottom: 10 }}>Investment Plan</Text>
-              
-              <View style={styles.planStats}>
-                <View style={styles.statBox}>
-                  <Text fontWeight="bold">Monthly</Text>
-                  <Text size="xl">${contributionAmount}</Text>
-                </View>
-                
-                <View style={styles.statBox}>
-                  <Text fontWeight="bold">Contributed</Text>
-                  <Text size="xl">${totalContributed}</Text>
-                </View>
-                
-                <View style={styles.statBox}>
-                  <Text fontWeight="bold">Remaining</Text>
-                  <Text size="xl">{remainingMonths} months</Text>
-                </View>
-              </View>
-
-              <View style={styles.planSettings}>
-                <View style={{ marginBottom: 15 }}>
-                  <Text style={{ marginBottom: 5 }}>Contribution Amount</Text>
-                  <TextInput
-                    placeholder="Monthly contribution amount"
-                    value={contributionAmount}
-                    onChangeText={setContributionAmount}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-                
-                <View style={{ marginBottom: 15 }}>
-                  <Text style={{ marginBottom: 5 }}>Target End Date</Text>
-                  <TextInput
-                    placeholder="Target end date (YYYY-MM-DD)"
-                    value={targetDate}
-                    onChangeText={setTargetDate}
-                  />
-                </View>
-                
-                <Button
-                  text="Update Plan"
-                  status="primary"
-                  onPress={() => Alert.alert("Success", "Investment plan updated")}
-                  style={{ marginTop: 10 }}
+          <Surface style={styles.section} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Account Information</Text>
+            
+            <View style={styles.profileInfo}>
+              <View style={styles.profileAvatar}>
+                <MaterialCommunityIcons
+                  name="account-circle"
+                  size={80}
+                  color={paperTheme.colors.primary}
                 />
               </View>
-            </SectionContent>
-          </Section>
-
-          <Section style={{ marginTop: 20, marginBottom: 30 }}>
-            <SectionContent>
-              <Text fontWeight="bold" size="h4" style={{ marginBottom: 10 }}>Contribution Schedule</Text>
               
-              <View style={styles.contributionList}>
-                {monthlyContributions.map((contribution, index) => (
-                  <View key={index} style={styles.contributionItem}>
-                    <View>
-                      <Text fontWeight="bold">{new Date(contribution.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}</Text>
-                      <Text size="sm">${contribution.amount}</Text>
-                    </View>
-                    
-                    {contribution.status === "completed" ? (
-                      <View style={styles.completedBadge}>
-                        <Text size="sm" style={{ color: "white" }}>Completed</Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.markCompletedButton}
-                        onPress={() => markAsCompleted(index)}
-                      >
-                        <Text size="sm" style={{ color: "white" }}>Mark as Completed</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+              <View style={styles.profileDetails}>
+                <Text variant="titleMedium">
+                  {userEmail || "User"}
+                </Text>
+                <Text variant="bodySmall" style={{ marginTop: 5 }}>
+                  Member since {new Date().toLocaleDateString()}
+                </Text>
+                <Text variant="bodySmall" style={{ marginTop: 5 }}>
+                  Roth IRA
+                </Text>
+              </View>
+            </View>
+          </Surface>
+
+          <Surface style={styles.section} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Investment Plan</Text>
+            
+            <View style={styles.planStats}>
+              <View style={styles.statBox}>
+                <Text variant="labelLarge">Monthly</Text>
+                <Text variant="headlineSmall">${contributionAmount}</Text>
+              </View>
+              
+              <View style={styles.statBox}>
+                <Text variant="labelLarge">Contributed</Text>
+                <Text variant="headlineSmall">${totalContributed}</Text>
+              </View>
+              
+              <View style={styles.statBox}>
+                <Text variant="labelLarge">Remaining</Text>
+                <Text variant="headlineSmall">{remainingMonths} months</Text>
+              </View>
+            </View>
+
+            <View style={styles.planSettings}>
+              <View style={{ marginBottom: 15 }}>
+                <Text variant="bodyMedium" style={{ marginBottom: 5 }}>Contribution Amount</Text>
+                <TextInput
+                  mode="outlined"
+                  label="Monthly contribution"
+                  value={contributionAmount}
+                  onChangeText={setContributionAmount}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              
+              <View style={{ marginBottom: 15 }}>
+                <Text variant="bodyMedium" style={{ marginBottom: 5 }}>Target End Date</Text>
+                <TextInput
+                  mode="outlined"
+                  label="Target date (YYYY-MM-DD)"
+                  value={targetDate}
+                  onChangeText={setTargetDate}
+                />
               </View>
               
               <Button
-                text="Add New Contribution"
-                status="info"
-                onPress={addContribution}
-                style={{ marginTop: 15 }}
-              />
-            </SectionContent>
-          </Section>
+                mode="contained"
+                onPress={() => Alert.alert("Success", "Investment plan updated")}
+                style={{ marginTop: 10 }}
+              >
+                Update Plan
+              </Button>
+            </View>
+          </Surface>
+
+          <Surface style={[styles.section, { marginBottom: 30 }]} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Contribution Schedule</Text>
+            
+            <View style={styles.contributionList}>
+              {monthlyContributions.map((contribution, index) => (
+                <View key={index} style={styles.contributionItem}>
+                  <View>
+                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>
+                      {new Date(contribution.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}
+                    </Text>
+                    <Text variant="bodySmall">${contribution.amount}</Text>
+                  </View>
+                  
+                  {contribution.status === "completed" ? (
+                    <View style={[styles.badge, { backgroundColor: paperTheme.colors.primary }]}>
+                      <Text variant="labelSmall" style={{ color: "white" }}>Completed</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.badge, { backgroundColor: paperTheme.colors.secondary }]}
+                      onPress={() => markAsCompleted(index)}
+                    >
+                      <Text variant="labelSmall" style={{ color: "white" }}>Mark as Completed</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+            
+            <Button
+              mode="outlined"
+              onPress={addContribution}
+              style={{ marginTop: 15 }}
+            >
+              Add New Contribution
+            </Button>
+          </Surface>
         </View>
       </ScrollView>
-    </Layout>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
+    padding: 16,
+  },
+  section: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    marginBottom: 16,
   },
   profileInfo: {
     flexDirection: "row",
@@ -215,16 +228,16 @@ const styles = StyleSheet.create({
   },
   statBox: {
     alignItems: "center",
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 8,
     backgroundColor: "rgba(0,0,0,0.05)",
     minWidth: "30%",
   },
   planSettings: {
-    marginTop: 10,
+    marginTop: 16,
   },
   contributionList: {
-    marginTop: 5,
+    marginTop: 8,
   },
   contributionItem: {
     flexDirection: "row",
@@ -234,16 +247,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(0,0,0,0.1)",
   },
-  completedBadge: {
-    backgroundColor: "green",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
-  },
-  markCompletedButton: {
-    backgroundColor: "blue",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
 });
+
+export default Profile;

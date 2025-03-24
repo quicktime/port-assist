@@ -6,23 +6,26 @@ import {
   View,
   KeyboardAvoidingView,
   Image,
+  StyleSheet,
 } from "react-native";
 import { supabase } from "../../initSupabase";
 import { AuthStackParamList } from "../../types/navigation";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
-  Layout,
   Text,
   TextInput,
   Button,
   useTheme,
-  themeColor,
-} from "react-native-rapi-ui";
+  Surface,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "../../provider/ThemeProvider";
 
-export default function ({
+export default function Register({
   navigation,
 }: NativeStackScreenProps<AuthStackParamList, "Register">) {
-  const { isDarkmode, setTheme } = useTheme();
+  const { isDarkMode, toggleTheme } = useAppTheme();
+  const theme = useTheme();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -47,134 +50,147 @@ export default function ({
   }
   
   return (
-    <KeyboardAvoidingView behavior="height" enabled style={{ flex: 1 }}>
-      <Layout>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <KeyboardAvoidingView behavior="height" style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
           }}
         >
           <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: isDarkmode ? "#17171E" : themeColor.white100,
-            }}
+            style={[
+              styles.imageContainer,
+              {
+                backgroundColor: isDarkMode ? "#17171E" : theme.colors.surfaceVariant,
+              }
+            ]}
           >
             <Image
               resizeMode="contain"
-              style={{
-                height: 220,
-                width: 220,
-              }}
+              style={styles.image}
               source={require("../../../assets/images/register.png")}
             />
           </View>
-          <View
-            style={{
-              flex: 3,
-              paddingHorizontal: 20,
-              paddingBottom: 20,
-              backgroundColor: isDarkmode ? themeColor.dark : themeColor.white,
-            }}
-          >
+          <Surface style={styles.formContainer}>
             <Text
-              fontWeight="bold"
-              size="h3"
-              style={{
-                alignSelf: "center",
-                padding: 30,
-              }}
+              variant="headlineMedium"
+              style={styles.headerText}
             >
               Register
             </Text>
-            <Text>Email</Text>
+            
+            <Text variant="bodyMedium">Email</Text>
             <TextInput
-              containerStyle={{ marginTop: 15 }}
+              style={styles.input}
               placeholder="Enter your email"
               value={email}
               autoCapitalize="none"
               autoComplete="email"
-              autoCorrect={false}
               keyboardType="email-address"
               onChangeText={(text) => setEmail(text)}
+              mode="outlined"
             />
 
-            <Text style={{ marginTop: 15 }}>Password</Text>
+            <Text style={styles.labelText} variant="bodyMedium">Password</Text>
             <TextInput
-              containerStyle={{ marginTop: 15 }}
+              style={styles.input}
               placeholder="Enter your password"
               value={password}
               autoCapitalize="none"
               autoComplete="password"
-              autoCorrect={false}
               secureTextEntry={true}
               onChangeText={(text) => setPassword(text)}
+              mode="outlined"
             />
+            
             <Button
-              text={loading ? "Loading" : "Create an account"}
-              onPress={() => {
-                register();
-              }}
-              style={{
-                marginTop: 20,
-              }}
+              mode="contained"
+              onPress={register}
+              style={styles.button}
+              loading={loading}
               disabled={loading}
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 15,
-                justifyContent: "center",
-              }}
             >
-              <Text size="md">Already have an account?</Text>
+              {loading ? "Loading" : "Create an account"}
+            </Button>
+
+            <View style={styles.linkContainer}>
+              <Text variant="bodyMedium">Already have an account?</Text>
               <TouchableOpacity
                 onPress={() => {
                   navigation.navigate("Login");
                 }}
               >
                 <Text
-                  size="md"
-                  fontWeight="bold"
-                  style={{
-                    marginLeft: 5,
-                  }}
+                  variant="bodyMedium"
+                  style={[styles.linkText, { color: theme.colors.primary }]}
                 >
                   Login here
                 </Text>
               </TouchableOpacity>
             </View>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 30,
-                justifyContent: "center",
-              }}
+            
+            <TouchableOpacity
+              style={styles.themeToggle}
+              onPress={toggleTheme}
             >
-              <TouchableOpacity
-                onPress={() => {
-                  isDarkmode ? setTheme("light") : setTheme("dark");
-                }}
+              <Text
+                variant="bodyMedium"
+                style={{ fontWeight: 'bold' }}
               >
-                <Text
-                  size="md"
-                  fontWeight="bold"
-                  style={{
-                    marginLeft: 5,
-                  }}
-                >
-                  {isDarkmode ? "☀️ light theme" : "🌑 dark theme"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+                {isDarkMode ? "☀️ light theme" : "🌑 dark theme"}
+              </Text>
+            </TouchableOpacity>
+          </Surface>
         </ScrollView>
-      </Layout>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  imageContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  image: {
+    height: 220,
+    width: 220,
+  },
+  formContainer: {
+    flex: 3,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerText: {
+    alignSelf: "center",
+    padding: 30,
+    fontWeight: 'bold',
+  },
+  labelText: {
+    marginTop: 15,
+  },
+  input: {
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  button: {
+    marginTop: 20,
+  },
+  linkContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 15,
+    justifyContent: "center",
+  },
+  linkText: {
+    marginLeft: 5,
+    fontWeight: 'bold',
+  },
+  themeToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 30,
+    justifyContent: "center",
+  }
+});

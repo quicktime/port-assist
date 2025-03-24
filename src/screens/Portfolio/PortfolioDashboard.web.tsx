@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Platform } from "react-native";
 import {
-  Layout,
   Text,
   Card,
   useTheme,
-  themeColor,
-} from "react-native-rapi-ui";
+  ActivityIndicator,
+  Surface
+} from "react-native-paper";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import { getPortfolioSummary } from "../services/portfolioService";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // This component only renders on web platform for an enhanced dashboard experience
 const PortfolioDashboard = () => {
-  const { isDarkmode } = useTheme();
+  const theme = useTheme();
+  const isDarkMode = theme.dark;
+  
   const [summary, setSummary] = useState({
     totalValue: 0,
     totalCost: 0,
@@ -65,7 +68,9 @@ const PortfolioDashboard = () => {
             summary.totalValue * 0.98,
             summary.totalValue
           ],
-          color: (opacity = 1) => isDarkmode ? `rgba(134, 247, 244, ${opacity})` : `rgba(46, 125, 50, ${opacity})`,
+          color: (opacity = 1) => isDarkMode ? 
+            `rgba(134, 247, 244, ${opacity})` : 
+            `rgba(46, 125, 50, ${opacity})`,
           strokeWidth: 2
         }
       ]
@@ -73,18 +78,22 @@ const PortfolioDashboard = () => {
   };
 
   const chartConfig = {
-    backgroundGradientFrom: isDarkmode ? themeColor.dark200 : themeColor.white,
-    backgroundGradientTo: isDarkmode ? themeColor.dark : themeColor.light100,
+    backgroundGradientFrom: isDarkMode ? theme.colors.surfaceVariant : theme.colors.background,
+    backgroundGradientTo: isDarkMode ? theme.colors.surface : theme.colors.background,
     decimalPlaces: 0,
-    color: (opacity = 1) => isDarkmode ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
-    labelColor: (opacity = 1) => isDarkmode ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+    color: (opacity = 1) => isDarkMode ? 
+      `rgba(255, 255, 255, ${opacity})` : 
+      `rgba(0, 0, 0, ${opacity})`,
+    labelColor: (opacity = 1) => isDarkMode ? 
+      `rgba(255, 255, 255, ${opacity})` : 
+      `rgba(0, 0, 0, ${opacity})`,
     style: {
       borderRadius: 16,
     },
     propsForDots: {
       r: "6",
       strokeWidth: "2",
-      stroke: isDarkmode ? themeColor.primary : themeColor.info,
+      stroke: isDarkMode ? theme.colors.primary : theme.colors.tertiary,
     },
   };
 
@@ -96,48 +105,57 @@ const PortfolioDashboard = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Loading dashboard data...</Text>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text variant="bodyMedium" style={{ marginTop: 10 }}>Loading dashboard data...</Text>
       </View>
     );
   }
 
   return (
-    <Layout>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
       <View style={styles.container}>
-        <Text size="h3" fontWeight="bold" style={styles.heading}>Portfolio Dashboard</Text>
+        <Text variant="headlineMedium" style={styles.heading}>Portfolio Dashboard</Text>
         
         <View style={styles.summaryContainer}>
           <Card style={styles.summaryCard}>
-            <Text fontWeight="bold" size="h4">Total Value</Text>
-            <Text size="xl">${summary.totalValue.toFixed(2)}</Text>
+            <Card.Content style={styles.cardContent}>
+              <Text variant="titleMedium">Total Value</Text>
+              <Text variant="headlineSmall">${summary.totalValue.toFixed(2)}</Text>
+            </Card.Content>
           </Card>
           
           <Card style={styles.summaryCard}>
-            <Text fontWeight="bold" size="h4">Total Profit/Loss</Text>
-            <Text 
-              size="xl" 
-              style={{ color: summary.totalProfit >= 0 ? 'green' : 'red' }}
-            >
-              {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfit.toFixed(2)} ({summary.totalProfitPercent.toFixed(2)}%)
-            </Text>
+            <Card.Content style={styles.cardContent}>
+              <Text variant="titleMedium">Total Profit/Loss</Text>
+              <Text
+                variant="headlineSmall"
+                style={{
+                  color: summary.totalProfit >= 0 ? theme.colors.primary : theme.colors.error,
+                }}
+              >
+                {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfit.toFixed(2)} ({summary.totalProfitPercent.toFixed(2)}%)
+              </Text>
+            </Card.Content>
           </Card>
           
           <Card style={styles.summaryCard}>
-            <Text fontWeight="bold" size="h4">Cost Basis</Text>
-            <Text size="xl">${summary.totalCost.toFixed(2)}</Text>
+            <Card.Content style={styles.cardContent}>
+              <Text variant="titleMedium">Cost Basis</Text>
+              <Text variant="headlineSmall">${summary.totalCost.toFixed(2)}</Text>
+            </Card.Content>
           </Card>
         </View>
 
         <View style={styles.chartsContainer}>
-          <View style={styles.chartCard}>
-            <Text fontWeight="bold" size="lg" style={styles.chartTitle}>Portfolio Allocation</Text>
+          <Surface style={styles.chartCard} elevation={2}>
+            <Text variant="titleMedium" style={styles.chartTitle}>Portfolio Allocation</Text>
             {summary.items.length > 0 && (
               <PieChart
                 data={summary.items.map((item, index) => ({
                   name: item.symbol,
                   population: item.allocation || 0,
                   color: colors[index % colors.length],
-                  legendFontColor: isDarkmode ? '#FFF' : '#000',
+                  legendFontColor: isDarkMode ? '#FFF' : '#000',
                   legendFontSize: 12,
                 }))}
                 width={350}
@@ -149,10 +167,10 @@ const PortfolioDashboard = () => {
                 absolute
               />
             )}
-          </View>
+          </Surface>
           
-          <View style={styles.chartCard}>
-            <Text fontWeight="bold" size="lg" style={styles.chartTitle}>Performance Trend</Text>
+          <Surface style={styles.chartCard} elevation={2}>
+            <Text variant="titleMedium" style={styles.chartTitle}>Performance Trend</Text>
             <LineChart
               data={getPerformanceData()}
               width={350}
@@ -164,10 +182,10 @@ const PortfolioDashboard = () => {
                 borderRadius: 16,
               }}
             />
-          </View>
+          </Surface>
         </View>
       </View>
-    </Layout>
+    </SafeAreaView>
   );
 };
 
@@ -178,6 +196,9 @@ const colors = [
 ];
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     padding: 20,
   },
@@ -189,6 +210,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   summaryContainer: {
     flexDirection: 'row',
@@ -197,8 +219,10 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     width: '30%',
-    padding: 15,
+  },
+  cardContent: {
     alignItems: 'center',
+    padding: 10,
   },
   chartsContainer: {
     flexDirection: 'row',
@@ -209,14 +233,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     padding: 15,
     borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.23,
-    shadowRadius: 2.62,
-    elevation: 4,
   },
   chartTitle: {
     marginBottom: 10,

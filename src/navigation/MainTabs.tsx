@@ -1,50 +1,53 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useTheme } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-import { themeColor, useTheme } from "react-native-rapi-ui";
-import TabBarIcon from "../components/utils/TabBarIcon";
-import TabBarText from "../components/utils/TabBarText";
-
+// Import screens for tabs
 import Home from "../screens/Home";
-import Portfolio from "../screens/Portfolio/PortfolioScreen"; // New Portfolio screen
-import About from "../screens/About";
+import PortfolioScreen from "../screens/Portfolio/PortfolioScreen";
 import Profile from "../screens/Profile";
+import About from "../screens/About";
 
-const Tabs = createBottomTabNavigator();
+import { useAppTheme } from "../provider/ThemeProvider";
+import { MainTabsParamList } from "../types/navigation";
+
+// Create a properly typed bottom tab navigator
+const Tabs = createBottomTabNavigator<MainTabsParamList>();
+
 const MainTabs = () => {
-  const { isDarkmode } = useTheme();
+  const paperTheme = useTheme();
+  const { isDarkMode } = useAppTheme();
+ 
   return (
     <Tabs.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          borderTopColor: isDarkmode ? themeColor.dark100 : "#c0c0c0",
-          backgroundColor: isDarkmode ? themeColor.dark200 : "#ffffff",
+          borderTopColor: isDarkMode ? paperTheme.colors.backdrop : "#c0c0c0",
+          backgroundColor: isDarkMode ? paperTheme.colors.elevation.level2 : "#ffffff",
         },
+        tabBarActiveTintColor: paperTheme.colors.primary,
+        tabBarInactiveTintColor: isDarkMode ? "#aaaaaa" : "#777777",
       }}
     >
-      {/* these icons using Ionicons */}
       <Tabs.Screen
         name="Home"
         component={Home}
         options={{
-          tabBarLabel: ({ focused }) => (
-            <TabBarText focused={focused} title="Home" />
-          ),
-          tabBarIcon: ({ focused }) => (
-            <TabBarIcon focused={focused} icon={"md-home"} />
+          tabBarLabel: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" color={color} size={size} />
           ),
         }}
       />
       <Tabs.Screen
         name="Portfolio"
-        component={Portfolio}
+        component={PortfolioScreen}
         options={{
-          tabBarLabel: ({ focused }) => (
-            <TabBarText focused={focused} title="Portfolio" />
-          ),
-          tabBarIcon: ({ focused }) => (
-            <TabBarIcon focused={focused} icon={"trending-up"} />
+          tabBarLabel: "Portfolio",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="chart-line" color={color} size={size} />
           ),
         }}
       />
@@ -52,11 +55,9 @@ const MainTabs = () => {
         name="Profile"
         component={Profile}
         options={{
-          tabBarLabel: ({ focused }) => (
-            <TabBarText focused={focused} title="Profile" />
-          ),
-          tabBarIcon: ({ focused }) => (
-            <TabBarIcon focused={focused} icon={"person"} />
+          tabBarLabel: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account" color={color} size={size} />
           ),
         }}
       />
@@ -64,11 +65,9 @@ const MainTabs = () => {
         name="About"
         component={About}
         options={{
-          tabBarLabel: ({ focused }) => (
-            <TabBarText focused={focused} title="About" />
-          ),
-          tabBarIcon: ({ focused }) => (
-            <TabBarIcon focused={focused} icon={"ios-information-circle"} />
+          tabBarLabel: "About",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="information" color={color} size={size} />
           ),
         }}
       />

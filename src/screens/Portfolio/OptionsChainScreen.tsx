@@ -1,25 +1,30 @@
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, ActivityIndicator, FlatList, TouchableOpacity, Text as RNText, Alert } from "react-native";
+import { View, ScrollView, FlatList, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
-  Layout,
+  Appbar,
   Text,
-  TopNav,
-  themeColor,
-  useTheme,
   Button,
-  Section,
-  SectionContent,
-  Select,
-} from "react-native-rapi-ui";
-import { Ionicons } from "@expo/vector-icons";
+  Card,
+  useTheme,
+  ActivityIndicator,
+  Chip,
+  Divider,
+  SegmentedButtons,
+  DataTable,
+  Menu,
+  Searchbar,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { fetchOptionsData, fetchOptionsExpirations, fetchStockPrice, OptionData } from "../services/polygonService";
 import { MainStackParamList } from "../../types/navigation";
+import { useAppTheme } from "../../provider/ThemeProvider";
 
 type Props = NativeStackScreenProps<MainStackParamList, "OptionsChain">;
 
 export default function OptionsChainScreen({ route, navigation }: Props) {
-  const { isDarkmode, setTheme } = useTheme();
+  const { isDarkMode, toggleTheme } = useAppTheme();
+  const paperTheme = useTheme();
   const { symbol } = route.params as { symbol: string };
   
   const [stockPrice, setStockPrice] = useState<number | null>(null);
@@ -29,6 +34,8 @@ export default function OptionsChainScreen({ route, navigation }: Props) {
   const [options, setOptions] = useState<OptionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingOptions, setLoadingOptions] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -74,12 +81,11 @@ export default function OptionsChainScreen({ route, navigation }: Props) {
     await loadOptionsData(expDate);
   };
 
-  const handleOptionTypeChange = (type: 'call' | 'put') => {
-    setOptionType(type);
-  };
-
   const filteredOptions = options.filter(option => 
-    option.optionType === optionType
+    option.optionType === optionType && 
+    (filterText === '' || 
+     option.strikePrice.toString().includes(filterText) ||
+     option.openInterest.toString().includes(filterText))
   ).sort((a, b) => a.strikePrice - b.strikePrice);
 
   const renderOptionItem = ({ item }: { item: OptionData }) => {
@@ -90,146 +96,213 @@ export default function OptionsChainScreen({ route, navigation }: Props) {
     return (
       <TouchableOpacity
         onPress={() => navigation.navigate("OptionDetail", { option: item })}
-        style={{
-          padding: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: isDarkmode ? themeColor.dark300 : themeColor.light200,
-          backgroundColor: inTheMoney 
-            ? (isDarkmode ? 'rgba(46, 125, 50, 0.2)' : 'rgba(46, 125, 50, 0.1)')
-            : 'transparent',
-        }}
       >
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <Text fontWeight="bold">${item.strikePrice.toFixed(2)}</Text>
-          <Text>${item.lastPrice.toFixed(2)}</Text>
-        </View>
-        
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 5 }}>
-          <Text size="sm">Bid: ${item.bidPrice.toFixed(2)}</Text>
-          <Text size="sm">Ask: ${item.askPrice.toFixed(2)}</Text>
-        </View>
-        
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 5 }}>
-          <Text size="sm">OI: {item.openInterest}</Text>
-          <Text size="sm">Vol: {item.volume}</Text>
-          <Text size="sm">IV: {(item.impliedVolatility * 100).toFixed(1)}%</Text>
-        </View>
+        <DataTable.Row 
+          style={[
+            styles.optionRow,
+            inTheMoney && {
+              backgroundColor: isDarkMode 
+                ? 'rgba(46, 125, 50, 0.2)' 
+                : 'rgba(46, 125, 50, 0.1)'
+            }
+          ]}
+        >
+          <DataTable.Cell>{item.strikePrice.toFixed(2)}</DataTable.Cell>
+          <DataTable.Cell numeric>{item.lastPrice.toFixed(2)}</DataTable.Cell>
+          <DataTable.Cell numeric>{item.openInterest}</DataTable.Cell>
+          <DataTable.Cell numeric>{(item.impliedVolatility * 100).toFixed(1)}%</DataTable.Cell>
+        </DataTable.Row>
       </TouchableOpacity>
     );
   };
 
   if (loading) {
     return (
-      <Layout>
-        <TopNav
-          middleContent={`${symbol} Options`}
-          leftContent={
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color={isDarkmode ? themeColor.white100 : themeColor.dark}
-            />
-          }
-          leftAction={() => navigation.goBack()}
-        />
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color={themeColor.primary} />
-          <Text style={{ marginTop: 10 }}>Loading options data...</Text>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Appbar.Header>
+          <Appbar.BackAction onPress={() => navigation.goBack()} />
+          <Appbar.Content title={`${symbol} Options`} />
+        </Appbar.Header>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+          <Text variant="bodyLarge" style={styles.loadingText}>Loading options data...</Text>
         </View>
-      </Layout>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Layout>
-      <TopNav
-        middleContent={`${symbol} Options`}
-        leftContent={
-          <Ionicons
-            name="chevron-back"
-            size={20}
-            color={isDarkmode ? themeColor.white100 : themeColor.dark}
-          />
-        }
-        leftAction={() => navigation.goBack()}
-        rightContent={
-          <Ionicons
-            name={isDarkmode ? "sunny" : "moon"}
-            size={20}
-            color={isDarkmode ? themeColor.white100 : themeColor.dark}
-          />
-        }
-        rightAction={() => {
-          if (isDarkmode) {
-            setTheme("light");
-          } else {
-            setTheme("dark");
-          }
-        }}
-      />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <Appbar.Header>
+        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.Content title={`${symbol} Options`} />
+        <Appbar.Action 
+          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
+          onPress={toggleTheme} 
+        />
+      </Appbar.Header>
 
-      <ScrollView style={{ flex: 1 }}>
-        <View style={{ padding: 20 }}>
-          <Section>
-            <SectionContent>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text size="lg" fontWeight="bold">{symbol}</Text>
-                <Text size="lg">${stockPrice?.toFixed(2) || "N/A"}</Text>
-              </View>
-            </SectionContent>
-          </Section>
-
-          <View style={{ marginTop: 20 }}>
-            <Text fontWeight="bold" style={{ marginBottom: 10 }}>Expiration Date</Text>
-            <Select
-              items={expirationDates.map(date => ({ label: date, value: date }))}
-              value={selectedExpiration}
-              placeholder="Select expiration date"
-              onValueChange={(value) => handleExpirationChange(value)}
-            />
-          </View>
-
-          <View style={{ marginTop: 20, flexDirection: "row", justifyContent: "space-between" }}>
-            <Button
-              text="Calls"
-              status={optionType === 'call' ? "primary" : "basic"}
-              style={{ flex: 1, marginRight: 10 }}
-              onPress={() => handleOptionTypeChange('call')}
-            />
-            <Button
-              text="Puts"
-              status={optionType === 'put' ? "primary" : "basic"}
-              style={{ flex: 1 }}
-              onPress={() => handleOptionTypeChange('put')}
-            />
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 10, backgroundColor: isDarkmode ? themeColor.dark200 : themeColor.gray100 }}>
-              <Text fontWeight="bold">Strike</Text>
-              <Text fontWeight="bold">Last</Text>
+      <ScrollView style={styles.scrollView}>
+        <Card style={styles.overviewCard}>
+          <Card.Content>
+            <View style={styles.overviewHeader}>
+              <Text variant="headlineMedium">{symbol}</Text>
+              <Text variant="headlineMedium">${stockPrice?.toFixed(2) || "N/A"}</Text>
             </View>
+            
+            <View style={styles.expirationContainer}>
+              <Text variant="bodyMedium" style={styles.label}>Expiration Date</Text>
+              
+              <Menu
+                visible={menuVisible}
+                onDismiss={() => setMenuVisible(false)}
+                anchor={
+                  <Button 
+                    mode="outlined" 
+                    onPress={() => setMenuVisible(true)}
+                    icon="calendar"
+                    style={styles.expirationButton}
+                  >
+                    {selectedExpiration || "Select date"}
+                  </Button>
+                }
+                style={styles.expirationMenu}
+              >
+                <ScrollView style={styles.expirationMenuScroll}>
+                  {expirationDates.map(date => (
+                    <Menu.Item
+                      key={date}
+                      onPress={() => {
+                        handleExpirationChange(date);
+                        setMenuVisible(false);
+                      }}
+                      title={date}
+                    />
+                  ))}
+                </ScrollView>
+              </Menu>
+            </View>
+            
+            <SegmentedButtons
+              value={optionType}
+              onValueChange={(value) => setOptionType(value as 'call' | 'put')}
+              buttons={[
+                { value: 'call', label: 'Calls' },
+                { value: 'put', label: 'Puts' }
+              ]}
+              style={styles.segmentedButtons}
+            />
+          </Card.Content>
+        </Card>
 
-            {loadingOptions ? (
-              <View style={{ padding: 20, alignItems: "center" }}>
-                <ActivityIndicator size="small" color={themeColor.primary} />
-                <Text style={{ marginTop: 10 }}>Loading options...</Text>
-              </View>
-            ) : filteredOptions.length > 0 ? (
-              <FlatList
-                data={filteredOptions}
-                renderItem={renderOptionItem}
-                keyExtractor={(item) => item.symbol}
-                scrollEnabled={false}
-              />
-            ) : (
-              <View style={{ padding: 20, alignItems: "center" }}>
-                <Text>No options available for this selection</Text>
-              </View>
-            )}
-          </View>
-        </View>
+        <Card style={styles.optionsCard}>
+          <Card.Content>
+            <Searchbar
+              placeholder="Filter by strike price"
+              onChangeText={setFilterText}
+              value={filterText}
+              style={styles.searchBar}
+            />
+
+            <DataTable>
+              <DataTable.Header>
+                <DataTable.Title>Strike</DataTable.Title>
+                <DataTable.Title numeric>Last</DataTable.Title>
+                <DataTable.Title numeric>OI</DataTable.Title>
+                <DataTable.Title numeric>IV%</DataTable.Title>
+              </DataTable.Header>
+
+              {loadingOptions ? (
+                <View style={styles.loadingOptionsContainer}>
+                  <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                  <Text style={styles.loadingOptionsText}>Loading options...</Text>
+                </View>
+              ) : filteredOptions.length > 0 ? (
+                <FlatList
+                  data={filteredOptions}
+                  renderItem={renderOptionItem}
+                  keyExtractor={(item) => item.symbol}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={styles.noOptionsContainer}>
+                  <Text>No options available for this selection</Text>
+                </View>
+              )}
+            </DataTable>
+          </Card.Content>
+        </Card>
       </ScrollView>
-    </Layout>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+  },
+  overviewCard: {
+    margin: 16,
+    borderRadius: 8,
+  },
+  overviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  expirationContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    marginBottom: 8,
+  },
+  expirationButton: {
+    width: '100%',
+  },
+  expirationMenu: {
+    width: '80%',
+  },
+  expirationMenuScroll: {
+    maxHeight: 300,
+  },
+  segmentedButtons: {
+    marginTop: 8,
+  },
+  optionsCard: {
+    margin: 16,
+    marginTop: 0,
+    borderRadius: 8,
+    marginBottom: 32,
+  },
+  searchBar: {
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  optionRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.12)',
+  },
+  loadingOptionsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingOptionsText: {
+    marginTop: 10,
+  },
+  noOptionsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  }
+});

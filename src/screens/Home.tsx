@@ -1,43 +1,37 @@
 import React from "react";
-import { View, Linking } from "react-native";
-import { MainStackParamList } from "../types/navigation";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { supabase } from "../initSupabase";
 import {
-  Layout,
-  Button,
+  Appbar,
   Text,
-  TopNav,
-  Section,
-  SectionContent,
-  useTheme,
-  themeColor,
-} from "react-native-rapi-ui";
-import { Ionicons } from "@expo/vector-icons";
+  Button,
+  Surface,
+  useTheme
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MainStackParamList } from "../types/navigation";
+import { useAppTheme } from "../provider/ThemeProvider";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-export default function ({
-  navigation,
-}: NativeStackScreenProps<MainStackParamList, "MainTabs">) {
-  const { isDarkmode, setTheme } = useTheme();
+type HomeScreenNavigationProp = NativeStackNavigationProp<MainStackParamList>;
+
+const Home = () => {
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+  const paperTheme = useTheme();
+  const { isDarkMode, toggleTheme } = useAppTheme();
+
   return (
-    <Layout>
-      <TopNav
-        middleContent="Home"
-        rightContent={
-          <Ionicons
-            name={isDarkmode ? "sunny" : "moon"}
-            size={20}
-            color={isDarkmode ? themeColor.white100 : themeColor.dark}
-          />
-        }
-        rightAction={() => {
-          if (isDarkmode) {
-            setTheme("light");
-          } else {
-            setTheme("dark");
-          }
-        }}
-      />
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <Appbar.Header>
+        <Appbar.Content title="Investment Portfolio Tracker" />
+        <Appbar.Action
+          icon={isDarkMode ? "white-balance-sunny" : "weather-night"}
+          onPress={toggleTheme}
+        />
+      </Appbar.Header>
+
       <View
         style={{
           flex: 1,
@@ -46,85 +40,70 @@ export default function ({
           padding: 20,
         }}
       >
-        <Section style={{ marginTop: 20, width: "100%" }}>
-          <SectionContent>
-            <Text fontWeight="bold" style={{ textAlign: "center", marginBottom: 10 }}>
-              Investment Portfolio Tracker
-            </Text>
-            <Text style={{ textAlign: "center", marginBottom: 20 }}>
-              Track your investments, monitor options data with greeks, and analyze your portfolio performance.
-            </Text>
-            
-            <Button
-              text="View Portfolio"
-              status="primary"
-              onPress={() => {
-                navigation.navigate("Portfolio");
-              }}
-              style={{
-                marginTop: 10,
-              }}
-              rightContent={
-                <Ionicons name="trending-up" size={20} color={themeColor.white100} />
-              }
-            />
-            
-            <Button
-              text="View Options Chain"
-              status="info"
-              onPress={() => {
-                navigation.navigate("OptionsChain", { symbol: "SPY" });
-              }}
-              style={{
-                marginTop: 10,
-              }}
-              rightContent={
-                <Ionicons name="options-outline" size={20} color={themeColor.white100} />
-              }
-            />
+        <Surface style={{ width: '100%', padding: 16, borderRadius: 8, elevation: 4 }}>
+          <Text variant="titleLarge" style={{ textAlign: "center", marginBottom: 10 }}>
+            Investment Portfolio Tracker
+          </Text>
+          <Text variant="bodyMedium" style={{ textAlign: "center", marginBottom: 20 }}>
+            Track your investments, monitor options data with greeks, and analyze your portfolio performance.
+          </Text>
+         
+          <Button
+            mode="contained"
+            // Here we navigate to the Portfolio tab instead of trying to navigate to a non-existent screen
+            onPress={() => navigation.navigate("MainTabs", { screen: "Portfolio" })}
+            style={{ marginTop: 10 }}
+            icon={({ size, color }) => (
+              <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+            )}
+          >
+            View Portfolio
+          </Button>
+         
+          <Button
+            mode="contained-tonal"
+            onPress={() => navigation.navigate("OptionsChain", { symbol: "SPY" })}
+            style={{ marginTop: 10 }}
+            icon={({ size, color }) => (
+              <MaterialCommunityIcons name="chart-timeline-variant" size={size} color={color} />
+            )}
+          >
+            View Options Chain
+          </Button>
 
-            <Button
-              text="Add New Stock"
-              status="success"
-              onPress={() => {
-                navigation.navigate("AddStock");
-              }}
-              style={{
-                marginTop: 10,
-              }}
-              rightContent={
-                <Ionicons name="add-circle-outline" size={20} color={themeColor.white100} />
+          <Button
+            mode="contained-tonal"
+            onPress={() => navigation.navigate("AddStock")}
+            style={{ marginTop: 10 }}
+            icon={({ size, color }) => (
+              <MaterialCommunityIcons name="plus-circle-outline" size={size} color={color} />
+            )}
+          >
+            Add New Stock
+          </Button>
+         
+          <Button
+            mode="outlined"
+            onPress={async () => {
+              const { error } = await supabase.auth.signOut();
+              if (!error) {
+                alert("Signed out!");
               }
-            />
-            
-            <Button
-              text="Rapi UI Documentation"
-              status="info"
-              onPress={() => Linking.openURL("https://rapi-ui.kikiding.space/")}
-              style={{
-                marginTop: 30,
-              }}
-            />
-            
-            <Button
-              status="danger"
-              text="Logout"
-              onPress={async () => {
-                const { error } = await supabase.auth.signOut();
-                if (!error) {
-                  alert("Signed out!");
-                }
-                if (error) {
-                  alert(error.message);
-                }
-              }}
-              style={{
-                marginTop: 10,
-              }}
-            />
-          </SectionContent>
-        </Section>
+              if (error) {
+                alert(error.message);
+              }
+            }}
+            style={{ marginTop: 30 }}
+            icon={({ size, color }) => (
+              <MaterialCommunityIcons name="logout" size={size} color={color} />
+            )}
+          >
+            Logout
+          </Button>
+        </Surface>
       </View>
-    </Layout>
+    </SafeAreaView>
   );
-}
+};
+
+export default Home;

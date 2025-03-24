@@ -1,21 +1,35 @@
 import React from "react";
-import { Text, themeColor, useTheme } from "react-native-rapi-ui";
+import { StyleSheet } from "react-native";
+import { Text, useTheme } from "react-native-paper";
+import { useAppTheme } from "../../provider/ThemeProvider";
+
 export default ({ title, focused }: { title: string; focused: boolean }) => {
-  const { isDarkmode } = useTheme();
+  const { isDarkMode } = useAppTheme();
+  const theme = useTheme();
+  
   return (
     <Text
-      fontWeight="bold"
-      style={{
-        marginBottom: 5,
-        color: focused
-          ? isDarkmode
-            ? themeColor.white100
-            : themeColor.primary
-          : "rgb(143, 155, 179)",
-        fontSize: 10,
-      }}
+      variant="labelSmall"
+      style={[
+        styles.label, 
+        { 
+          color: focused
+            ? isDarkMode
+              ? theme.colors.primary
+              : theme.colors.primary
+            : "rgb(143, 155, 179)",
+        }
+      ]}
     >
       {title}
     </Text>
   );
 };
+
+const styles = StyleSheet.create({
+  label: {
+    marginBottom: 5,
+    fontSize: 10,
+    fontWeight: 'bold',
+  }
+});

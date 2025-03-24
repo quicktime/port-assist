@@ -6,27 +6,32 @@ import {
   View,
   KeyboardAvoidingView,
   Image,
+  StyleSheet,
+  Platform,
 } from "react-native";
 import { supabase } from "../../initSupabase";
 import { AuthStackParamList } from "../../types/navigation";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-
 import {
-  Layout,
   Text,
   TextInput,
   Button,
+  Surface,
   useTheme,
-  themeColor,
-} from "react-native-rapi-ui";
+  IconButton,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "../../provider/ThemeProvider";
 
 export default function ({
   navigation,
 }: NativeStackScreenProps<AuthStackParamList, "Login">) {
-  const { isDarkmode, setTheme } = useTheme();
+  const { isDarkMode, toggleTheme } = useAppTheme();
+  const paperTheme = useTheme();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
 
   async function login() {
     setLoading(true);
@@ -48,152 +53,183 @@ export default function ({
   }
   
   return (
-    <KeyboardAvoidingView behavior="height" enabled style={{ flex: 1 }}>
-      <Layout>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === "ios" ? "padding" : "height"} 
+      enabled 
+      style={{ flex: 1 }}
+    >
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
+      <SafeAreaView style={styles.container}>
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
           }}
         >
           <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: isDarkmode ? "#17171E" : themeColor.white100,
-            }}
+            style={[
+              styles.imageContainer,
+              { backgroundColor: isDarkMode ? "#1E1E1E" : "#f7f7f7" }
+            ]}
           >
             <Image
               resizeMode="contain"
-              style={{
-                height: 220,
-                width: 220,
-              }}
+              style={styles.image}
               source={require("../../../assets/images/login.png")}
             />
           </View>
-          <View
-            style={{
-              flex: 3,
-              paddingHorizontal: 20,
-              paddingBottom: 20,
-              backgroundColor: isDarkmode ? themeColor.dark : themeColor.white,
-            }}
+          <Surface
+            style={[
+              styles.formContainer,
+              { backgroundColor: isDarkMode ? paperTheme.colors.background : paperTheme.colors.background }
+            ]}
           >
             <Text
-              fontWeight="bold"
-              style={{
-                alignSelf: "center",
-                padding: 30,
-              }}
-              size="h3"
+              variant="headlineMedium"
+              style={styles.title}
             >
               Login
             </Text>
-            <Text>Email</Text>
+            
             <TextInput
-              containerStyle={{ marginTop: 15 }}
+              label="Email"
+              mode="outlined"
               placeholder="Enter your email"
               value={email}
               autoCapitalize="none"
               autoComplete="email"
-              autoCorrect={false}
               keyboardType="email-address"
-              onChangeText={(text) => setEmail(text)}
+              onChangeText={setEmail}
+              style={styles.input}
             />
 
-            <Text style={{ marginTop: 15 }}>Password</Text>
             <TextInput
-              containerStyle={{ marginTop: 15 }}
+              label="Password"
+              mode="outlined"
               placeholder="Enter your password"
               value={password}
               autoCapitalize="none"
               autoComplete="password"
-              autoCorrect={false}
-              secureTextEntry={true}
-              onChangeText={(text) => setPassword(text)}
+              secureTextEntry={!passwordVisible}
+              onChangeText={setPassword}
+              style={styles.input}
+              right={
+                <TextInput.Icon 
+                  icon={passwordVisible ? "eye-off" : "eye"} 
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                />
+              }
             />
+            
             <Button
-              text={loading ? "Loading" : "Continue"}
-              onPress={() => {
-                login();
-              }}
-              style={{
-                marginTop: 20,
-              }}
-              disabled={loading}
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 15,
-                justifyContent: "center",
-              }}
+              mode="contained"
+              loading={loading}
+              onPress={login}
+              style={styles.button}
             >
-              <Text size="md">Don't have an account?</Text>
+              {loading ? "Loading..." : "Continue"}
+            </Button>
+
+            <View style={styles.linkContainer}>
+              <Text variant="bodyMedium">Don't have an account?</Text>
               <TouchableOpacity
                 onPress={() => {
                   navigation.navigate("Register");
                 }}
               >
                 <Text
-                  size="md"
-                  fontWeight="bold"
-                  style={{
-                    marginLeft: 5,
-                  }}
+                  variant="bodyMedium"
+                  style={[styles.link, { color: paperTheme.colors.primary }]}
                 >
                   Register here
                 </Text>
               </TouchableOpacity>
             </View>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 10,
-                justifyContent: "center",
-              }}
-            >
+            
+            <View style={styles.linkContainer}>
               <TouchableOpacity
                 onPress={() => {
                   navigation.navigate("ForgetPassword");
                 }}
               >
-                <Text size="md" fontWeight="bold">
-                  Forget password
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 30,
-                justifyContent: "center",
-              }}
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  isDarkmode ? setTheme("light") : setTheme("dark");
-                }}
-              >
                 <Text
-                  size="md"
-                  fontWeight="bold"
-                  style={{
-                    marginLeft: 5,
-                  }}
+                  variant="bodyMedium"
+                  style={[styles.link, { color: paperTheme.colors.primary }]}
                 >
-                  {isDarkmode ? "☀️ light theme" : "🌑 dark theme"}
+                  Forgot password?
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+            
+            <View style={styles.themeSwitchContainer}>
+              <TouchableOpacity
+                onPress={toggleTheme}
+                style={styles.themeSwitch}
+              >
+                <IconButton
+                  icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
+                  size={20}
+                />
+                <Text variant="bodyMedium">
+                  {isDarkMode ? "Light theme" : "Dark theme"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Surface>
         </ScrollView>
-      </Layout>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  imageContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  image: {
+    height: 220,
+    width: 220,
+  },
+  formContainer: {
+    flex: 3,
+    padding: 20,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    elevation: 4,
+  },
+  title: {
+    alignSelf: "center",
+    marginVertical: 30,
+    fontWeight: "bold",
+  },
+  input: {
+    marginVertical: 8,
+  },
+  button: {
+    marginTop: 20,
+    paddingVertical: 6,
+  },
+  linkContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+  },
+  link: {
+    fontWeight: "bold",
+    marginLeft: 5,
+  },
+  themeSwitchContainer: {
+    alignItems: "center",
+    marginTop: 30,
+  },
+  themeSwitch: {
+    flexDirection: "row",
+    alignItems: "center",
+  }
+});

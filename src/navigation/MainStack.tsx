@@ -1,15 +1,17 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { MainStackParamList } from "../types/navigation";
 
-import SecondScreen from "../screens/SecondScreen";
+// Import screens
 import MainTabs from "./MainTabs";
 
-// Import new portfolio screens
+// Import portfolio screens
 import AddEditStockScreen from "../screens/Portfolio/AddEditStockScreen";
 import OptionsChainScreen from "../screens/Portfolio/OptionsChainScreen";
 import OptionDetailScreen from "../screens/Portfolio/OptionDetailScreen";
 
-const MainStack = createNativeStackNavigator();
+const MainStack = createNativeStackNavigator<MainStackParamList>();
+
 const Main = () => {
   return (
     <MainStack.Navigator
@@ -17,9 +19,11 @@ const Main = () => {
         headerShown: false,
       }}
     >
+      {/* Main tab navigator as the root */}
       <MainStack.Screen name="MainTabs" component={MainTabs} />
-      <MainStack.Screen name="SecondScreen" component={SecondScreen} />
       
+      {/* Other screens */}
+     
       {/* Portfolio related screens */}
       <MainStack.Screen name="AddStock" component={AddEditStockScreen} />
       <MainStack.Screen name="EditStock" component={AddEditStockScreen} />

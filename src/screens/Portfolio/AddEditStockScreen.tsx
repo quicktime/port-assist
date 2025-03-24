@@ -1,24 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, Alert, KeyboardAvoidingView } from "react-native";
+import { View, ScrollView, Alert, KeyboardAvoidingView, StyleSheet, Platform } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
-  Layout,
+  Appbar,
   Text,
-  TopNav,
   TextInput,
   Button,
-  themeColor,
   useTheme,
-} from "react-native-rapi-ui";
-import { Ionicons } from "@expo/vector-icons";
+  ActivityIndicator,
+  Chip,
+  Divider,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { addPortfolioItem, updatePortfolioItem, PortfolioItem } from "../services/portfolioService";
 import { fetchStockPrice } from "../services/polygonService";
 import { MainStackParamList } from "../../types/navigation";
+import { useAppTheme } from "../../provider/ThemeProvider";
 
 type Props = NativeStackScreenProps<MainStackParamList, "AddStock" | "EditStock">;
 
 export default function AddEditStockScreen({ route, navigation }: Props) {
-  const { isDarkmode, setTheme } = useTheme();
+  const { isDarkMode, toggleTheme } = useAppTheme();
+  const paperTheme = useTheme();
   const isEditMode = route.name === "EditStock";
   const editItem = isEditMode ? (route.params as { item: PortfolioItem }).item : undefined;
   
@@ -130,117 +133,161 @@ export default function AddEditStockScreen({ route, navigation }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView behavior="height" style={{ flex: 1 }}>
-      <Layout>
-        <TopNav
-          middleContent={isEditMode ? "Edit Stock" : "Add Stock"}
-          leftContent={
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color={isDarkmode ? themeColor.white100 : themeColor.dark}
-            />
-          }
-          leftAction={() => navigation.goBack()}
-          rightContent={
-            <Ionicons
-              name={isDarkmode ? "sunny" : "moon"}
-              size={20}
-              color={isDarkmode ? themeColor.white100 : themeColor.dark}
-            />
-          }
-          rightAction={() => {
-            if (isDarkmode) {
-              setTheme("light");
-            } else {
-              setTheme("dark");
-            }
-          }}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <Appbar.Header>
+        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.Content title={isEditMode ? "Edit Stock" : "Add Stock"} />
+        <Appbar.Action 
+          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
+          onPress={toggleTheme} 
         />
+      </Appbar.Header>
 
-        <ScrollView style={{ flex: 1, padding: 20 }}>
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ marginBottom: 10 }}>Symbol *</Text>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoid}
+      >
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.formContainer}>
+            <Text variant="bodyMedium" style={styles.label}>Symbol *</Text>
+            <View style={styles.symbolRow}>
               <TextInput
-                containerStyle={{ flex: 1, marginRight: 10 }}
+                mode="outlined"
                 placeholder="e.g., AAPL"
                 value={symbol}
                 autoCapitalize="characters"
                 onChangeText={setSymbol}
-                editable={!isEditMode}
+                disabled={isEditMode}
+                style={styles.symbolInput}
               />
               {!isEditMode && (
                 <Button
-                  text={checkingSymbol ? "..." : "Check"}
-                  status="info"
-                  size="sm"
+                  mode="contained"
                   onPress={handleCheckSymbol}
                   disabled={checkingSymbol || !symbol}
-                />
+                  loading={checkingSymbol}
+                  style={styles.checkButton}
+                >
+                  Check
+                </Button>
               )}
             </View>
+            
             {currentPrice !== null && (
-              <Text
-                style={{
-                  marginTop: 5,
-                  color: isDarkmode ? themeColor.success : "green",
-                }}
+              <Chip 
+                icon="check-circle" 
+                style={styles.priceChip}
+                textStyle={{ color: paperTheme.colors.onSurfaceVariant }}
               >
                 Current price: ${currentPrice.toFixed(2)}
-              </Text>
+              </Chip>
             )}
-          </View>
 
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ marginBottom: 10 }}>Shares *</Text>
+            <Divider style={styles.divider} />
+
+            <Text variant="bodyMedium" style={styles.label}>Shares *</Text>
             <TextInput
+              mode="outlined"
               placeholder="Number of shares"
               value={shares}
               onChangeText={setShares}
               keyboardType="decimal-pad"
+              style={styles.input}
             />
-          </View>
 
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ marginBottom: 10 }}>Average Price *</Text>
+            <Text variant="bodyMedium" style={styles.label}>Average Price *</Text>
             <TextInput
+              mode="outlined"
               placeholder="Your average purchase price"
               value={avgPrice}
               onChangeText={setAvgPrice}
               keyboardType="decimal-pad"
+              style={styles.input}
+              left={<TextInput.Affix text="$" />}
             />
-          </View>
 
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ marginBottom: 10 }}>Target Price</Text>
+            <Text variant="bodyMedium" style={styles.label}>Target Price</Text>
             <TextInput
+              mode="outlined"
               placeholder="Your target sell price (optional)"
               value={targetPrice}
               onChangeText={setTargetPrice}
               keyboardType="decimal-pad"
+              style={styles.input}
+              left={<TextInput.Affix text="$" />}
             />
-          </View>
 
-          <View style={{ marginBottom: 30 }}>
-            <Text style={{ marginBottom: 10 }}>Notes</Text>
+            <Text variant="bodyMedium" style={styles.label}>Notes</Text>
             <TextInput
+              mode="outlined"
               placeholder="Add any notes about this position"
               value={notes}
               onChangeText={setNotes}
               multiline
               numberOfLines={4}
-              textAlignVertical="top"
+              style={[styles.input, styles.notesInput]}
             />
-          </View>
 
-          <Button
-            text={loading ? "Saving..." : (isEditMode ? "Update Stock" : "Add to Portfolio")}
-            onPress={handleSave}
-            disabled={loading}
-          />
+            <Button
+              mode="contained"
+              onPress={handleSave}
+              loading={loading}
+              disabled={loading}
+              style={styles.saveButton}
+              icon="content-save"
+            >
+              {loading ? "Saving..." : (isEditMode ? "Update Stock" : "Add to Portfolio")}
+            </Button>
+          </View>
         </ScrollView>
-      </Layout>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  formContainer: {
+    padding: 20,
+  },
+  label: {
+    marginBottom: 8,
+  },
+  symbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  symbolInput: {
+    flex: 1,
+    marginRight: 10,
+  },
+  checkButton: {
+    marginTop: 4, // Align better with TextInput
+  },
+  priceChip: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  divider: {
+    marginVertical: 16,
+  },
+  input: {
+    marginBottom: 16,
+  },
+  notesInput: {
+    marginBottom: 24,
+    minHeight: 100,
+  },
+  saveButton: {
+    marginBottom: 30,
+    paddingVertical: 6,
+  }
+});
