@@ -1,10 +1,13 @@
 import React from "react";
-import { View, ActivityIndicator } from "react-native";
-import { Layout, themeColor } from "react-native-rapi-ui";
+import { View } from "react-native";
+import { ActivityIndicator, useTheme } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function () {
+export default function Loading() {
+  const theme = useTheme();
+
   return (
-    <Layout>
+    <SafeAreaView style={{ flex: 1 }}>
       <View
         style={{
           flex: 1,
@@ -12,8 +15,11 @@ export default function () {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator size="large" color={themeColor.primary} />
+        <ActivityIndicator 
+          size="large" 
+          color={theme.colors.primary} 
+        />
       </View>
-    </Layout>
+    </SafeAreaView>
   );
 }
