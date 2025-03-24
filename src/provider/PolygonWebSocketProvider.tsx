@@ -1,6 +1,161 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { wsManager } from '../screens/services/polygonService';
+import { POLYGON_API_KEY } from '@env';
+import { EventEmitter } from 'eventemitter3';
+
+// WebSocket connection manager for Polygon.io
+class PolygonWebSocketManager {
+  private socket: WebSocket | null = null;
+  private reconnectAttempts: number = 0;
+  private MAX_RECONNECT_ATTEMPTS: number = 5;
+  public events: EventEmitter = new EventEmitter();
+  private subscriptions: Set<string> = new Set();
+
+  constructor() {
+    // Bind methods to maintain correct context
+    this.connect = this.connect.bind(this);
+    this.disconnect = this.disconnect.bind(this);
+    this.subscribe = this.subscribe.bind(this);
+    this.unsubscribe = this.unsubscribe.bind(this);
+  }
+
+  // Create WebSocket connection URL
+  private getWebSocketUrl(): string {
+    return `wss://socket.polygon.io/stocks`;
+  }
+
+  // Establish WebSocket connection
+  async connect(): Promise<void> {
+    // Prevent multiple connection attempts
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    // Reset reconnection attempts
+    this.reconnectAttempts = 0;
+
+    try {
+      this.socket = new WebSocket(
+        `${this.getWebSocketUrl()}?apiKey=${POLYGON_API_KEY}`
+      );
+
+      // Set up event listeners
+      this.socket.onopen = this.handleOpen.bind(this);
+      this.socket.onmessage = this.handleMessage.bind(this);
+      this.socket.onerror = this.handleError.bind(this);
+      this.socket.onclose = this.handleClose.bind(this);
+    } catch (error) {
+      this.handleConnectionError(error);
+    }
+  }
+
+  // Handle successful connection
+  private handleOpen(): void {
+    this.reconnectAttempts = 0;
+    this.events.emit('authenticated');
+
+    // Resubscribe to previous subscriptions
+    this.subscriptions.forEach(channel => {
+      this.socket?.send(JSON.stringify({ action: 'subscribe', params: channel }));
+    });
+  }
+
+  // Handle incoming messages
+  private handleMessage(event: MessageEvent): void {
+    try {
+      const data = JSON.parse(event.data);
+      
+      // Emit different types of events based on message content
+      switch (data.type) {
+        case 'trade':
+          this.events.emit('trade', data);
+          break;
+        case 'quote':
+          this.events.emit('quote', data);
+          break;
+        case 'aggregate':
+          this.events.emit('aggregate', data);
+          break;
+        default:
+          console.log('Unhandled message type:', data);
+      }
+    } catch (error) {
+      console.error('Error parsing WebSocket message:', error);
+    }
+  }
+
+  // Handle connection errors
+  private handleError(error: Event): void {
+    console.error('WebSocket error:', error);
+    this.events.emit('connection_error', error);
+  }
+
+  // Handle connection close
+  private handleClose(event: CloseEvent): void {
+    if (!event.wasClean) {
+      this.reconnect();
+    }
+  }
+
+  // Handle connection error with custom error handling
+  private handleConnectionError(error: any): void {
+    console.error('WebSocket connection error:', error);
+    this.events.emit('connection_error', error);
+    this.reconnect();
+  }
+
+  // Attempt to reconnect
+  private reconnect(): void {
+    if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+      this.reconnectAttempts++;
+      const timeout = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+      
+      setTimeout(() => {
+        this.connect();
+      }, timeout);
+    } else {
+      this.events.emit('max_reconnect_attempts');
+    }
+  }
+
+  // Disconnect from WebSocket
+  disconnect(): void {
+    if (this.socket) {
+      // Unsubscribe from all channels before closing
+      this.subscriptions.forEach(channel => {
+        this.unsubscribe(channel);
+      });
+
+      this.socket.close();
+      this.socket = null;
+    }
+  }
+
+  // Subscribe to a specific channel
+  subscribe(channel: string): void {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ 
+        action: 'subscribe', 
+        params: channel 
+      }));
+      this.subscriptions.add(channel);
+    }
+  }
+
+  // Unsubscribe from a specific channel
+  unsubscribe(channel: string): void {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ 
+        action: 'unsubscribe', 
+        params: channel 
+      }));
+      this.subscriptions.delete(channel);
+    }
+  }
+}
+
+// Singleton instance of WebSocket manager
+export const wsManager = new PolygonWebSocketManager();
 
 // Context type
 interface PolygonWebSocketContextProps {
@@ -8,8 +163,8 @@ interface PolygonWebSocketContextProps {
   connect: () => Promise<void>;
   disconnect: () => void;
   connectionError: string | null;
-  subscribe: (channel: string, ticker: string) => void;
-  unsubscribe: (channel: string, ticker: string) => void;
+  subscribe: (channel: string) => void;
+  unsubscribe: (channel: string) => void;
 }
 
 // Create the context
@@ -38,8 +193,6 @@ export const PolygonWebSocketProvider: React.FC<{ children: React.ReactNode }> =
       
       // Attempt connection
       await wsManager.connect();
-      
-      // Success will be handled by event listeners
     } catch (error) {
       console.error('Error connecting to Polygon WebSocket:', error);
       setConnectionError(error instanceof Error ? error.message : 'Connection failed');
@@ -51,14 +204,14 @@ export const PolygonWebSocketProvider: React.FC<{ children: React.ReactNode }> =
     wsManager.disconnect();
   }, []);
 
-  // Subscribe to a channel and ticker
-  const subscribe = useCallback((channel: string, ticker: string) => {
-    wsManager.subscribe(channel, ticker);
+  // Subscribe to a channel
+  const subscribe = useCallback((channel: string) => {
+    wsManager.subscribe(channel);
   }, []);
 
-  // Unsubscribe from a channel and ticker
-  const unsubscribe = useCallback((channel: string, ticker: string) => {
-    wsManager.unsubscribe(channel, ticker);
+  // Unsubscribe from a channel
+  const unsubscribe = useCallback((channel: string) => {
+    wsManager.unsubscribe(channel);
   }, []);
 
   // Handle app state changes (foreground/background)

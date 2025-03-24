@@ -1,5 +1,4 @@
-// src/screens/Portfolio/OptionsChainScreen.tsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, ScrollView, FlatList, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import {
   Appbar,
@@ -8,22 +7,20 @@ import {
   Card,
   useTheme,
   ActivityIndicator,
-  Chip,
-  Divider,
   SegmentedButtons,
   DataTable,
   Menu,
   Searchbar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { 
-  fetchOptionsData, 
-  fetchOptionsExpirations, 
-  fetchStockPrice, 
-  subscribeToStockPrice,
-  subscribeToOptionData,
-  OptionData
+import {
+  fetchOptionsData,
+  fetchOptionsExpirations,
+  fetchStockPrice,
+  OptionData,
+  StockData
 } from "../services/polygonService";
+import { usePolygonWebSocket } from "../../provider/PolygonWebSocketProvider";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
 
@@ -34,7 +31,8 @@ type OptionsChainScreenProps = {
 export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) {
   const { isDarkMode, toggleTheme } = useAppTheme();
   const paperTheme = useTheme();
-  
+  const { subscribe, unsubscribe, isConnected } = usePolygonWebSocket();
+
   const [stockPrice, setStockPrice] = useState<number | null>(null);
   const [optionType, setOptionType] = useState<'call' | 'put'>('call');
   const [expirationDates, setExpirationDates] = useState<string[]>([]);
@@ -44,81 +42,93 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
-  
-  // Refs for subscriptions that need to be cleaned up
-  const stockPriceUnsubscribeRef = useRef<(() => void) | null>(null);
-  const optionUnsubscribesRef = useRef<Map<string, () => void>>(new Map());
 
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        // Set up real-time stock price subscription
-        const unsubscribe = await subscribeToStockPrice(symbol, (stockData) => {
-          setStockPrice(stockData.currentPrice);
-        });
-        
-        // Store unsubscribe function for cleanup
-        stockPriceUnsubscribeRef.current = unsubscribe;
-        
-        // Fetch initial stock price
-        const stockData = await fetchStockPrice(symbol);
-        setStockPrice(stockData.currentPrice);
-        
-        // Fetch available expiration dates
-        const dates = await fetchOptionsExpirations(symbol);
-        setExpirationDates(dates);
-        
-        if (dates.length > 0) {
-          setSelectedExpiration(dates[0]);
-          await loadOptionsData(dates[0]);
-        }
-      } catch (error) {
-        console.error("Error loading options data:", error);
-        Alert.alert("Error", "Failed to load options data");
-      } finally {
-        setLoading(false);
+  // Refs for tracking subscriptions
+  const stockSubscriptionRef = useRef<string | null>(null);
+  const optionSubscriptionsRef = useRef<Map<string, string>>(new Map());
+  const lastUpdateTimeRef = useRef<number>(0);
+  const pendingUpdatesRef = useRef<any[]>([]);
+
+  // Throttled update function
+  const throttledUpdate = useCallback(() => {
+    const now = Date.now();
+    if (now - lastUpdateTimeRef.current >= 20000) { // 20 seconds
+      // Apply all pending updates
+      if (pendingUpdatesRef.current.length > 0) {
+        setOptions(prevOptions =>
+          prevOptions.map(opt => {
+            const updates = pendingUpdatesRef.current
+              .filter(update => update.ticker === opt.symbol)
+              .reduce((acc, update) => ({
+                ...acc,
+                lastPrice: update.lastPrice || acc.lastPrice,
+                bidPrice: update.bidPrice || acc.bidPrice,
+                askPrice: update.askPrice || acc.askPrice,
+                openInterest: update.openInterest || acc.openInterest
+              }), opt);
+
+            return updates;
+          })
+        );
+
+        // Reset pending updates and update timestamp
+        pendingUpdatesRef.current = [];
+        lastUpdateTimeRef.current = now;
       }
-    };
+    }
+  }, []);
 
-    loadInitialData();
-    
-    // Cleanup subscriptions on unmount
-    return () => {
-      if (stockPriceUnsubscribeRef.current) {
-        stockPriceUnsubscribeRef.current();
-        stockPriceUnsubscribeRef.current = null;
+  // Load initial data and set up subscriptions
+  const loadInitialData = useCallback(async () => {
+    try {
+      // Fetch initial stock price
+      const stockData = await fetchStockPrice(symbol);
+      setStockPrice(stockData.currentPrice);
+
+      // Subscribe to stock price updates
+      if (isConnected) {
+        const subscriptionChannel = `Q.${symbol}`;
+        subscribe(subscriptionChannel);
+        stockSubscriptionRef.current = subscriptionChannel;
       }
-      
-      // Clean up all option subscriptions
-      optionUnsubscribesRef.current.forEach(unsubscribe => unsubscribe());
-      optionUnsubscribesRef.current.clear();
-    };
-  }, [symbol]);
 
-  const loadOptionsData = async (expDate: string) => {
+      // Fetch available expiration dates
+      const dates = await fetchOptionsExpirations(symbol);
+      setExpirationDates(dates);
+
+      if (dates.length > 0) {
+        setSelectedExpiration(dates[0]);
+        await loadOptionsData(dates[0]);
+      }
+    } catch (error) {
+      console.error("Error loading options data:", error);
+      Alert.alert("Error", "Failed to load options data");
+    } finally {
+      setLoading(false);
+    }
+  }, [symbol, isConnected, subscribe]);
+
+  // Load options data and set up real-time subscriptions
+  const loadOptionsData = useCallback(async (expDate: string) => {
     setLoadingOptions(true);
-    
+
     // Clear existing option subscriptions
-    optionUnsubscribesRef.current.forEach(unsubscribe => unsubscribe());
-    optionUnsubscribesRef.current.clear();
-    
+    optionSubscriptionsRef.current.forEach((channel) => {
+      unsubscribe(channel);
+    });
+    optionSubscriptionsRef.current.clear();
+
     try {
       const optionsData = await fetchOptionsData(symbol, expDate);
       setOptions(optionsData);
-      
-      // Set up real-time subscriptions for each option
-      for (const option of optionsData) {
-        const unsubscribe = await subscribeToOptionData(option.symbol, (update) => {
-          setOptions(prevOptions => 
-            prevOptions.map(opt => 
-              opt.symbol === option.symbol 
-                ? { ...opt, ...update } 
-                : opt
-            )
-          );
+
+      // Set up subscriptions for each option
+      if (isConnected) {
+        optionsData.forEach((option) => {
+          const subscriptionChannel = `Q.${option.symbol}`;
+          subscribe(subscriptionChannel);
+          optionSubscriptionsRef.current.set(option.symbol, subscriptionChannel);
         });
-        
-        optionUnsubscribesRef.current.set(option.symbol, unsubscribe);
       }
     } catch (error) {
       console.error("Error loading options chain:", error);
@@ -126,25 +136,77 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
     } finally {
       setLoadingOptions(false);
     }
-  };
+  }, [symbol, isConnected, subscribe, unsubscribe]);
 
+  // Set up WebSocket event listeners
+  useEffect(() => {
+    // Handler for stock price updates
+    const handleStockUpdate = (data: StockData) => {
+      if (data.ticker === symbol) {
+        setStockPrice(data.currentPrice);
+      }
+    };
+
+    // Handler for option updates
+    const handleOptionUpdate = (data: any) => {
+      // Check if the update is for an option in our current set
+      const matchingOption = options.find(opt => opt.symbol === data.ticker);
+      if (matchingOption) {
+        setOptions(prevOptions =>
+          prevOptions.map(opt =>
+            opt.symbol === data.ticker
+              ? {
+                ...opt,
+                lastPrice: data.lastPrice || opt.lastPrice,
+                bidPrice: data.bidPrice || opt.bidPrice,
+                askPrice: data.askPrice || opt.askPrice,
+                openInterest: data.openInterest || opt.openInterest
+              }
+              : opt
+          )
+        );
+      }
+    };
+
+    // Initial data load
+    loadInitialData();
+
+    // Cleanup function
+    return () => {
+      // Unsubscribe from stock price channel
+      if (stockSubscriptionRef.current) {
+        unsubscribe(stockSubscriptionRef.current);
+        stockSubscriptionRef.current = null;
+      }
+
+      // Unsubscribe from all option channels
+      optionSubscriptionsRef.current.forEach((channel) => {
+        unsubscribe(channel);
+      });
+      optionSubscriptionsRef.current.clear();
+    };
+  }, [symbol, loadInitialData, unsubscribe, options]);
+
+  // Handle expiration date change
   const handleExpirationChange = async (expDate: string) => {
     setSelectedExpiration(expDate);
     await loadOptionsData(expDate);
   };
 
-  const filteredOptions = options.filter(option => 
-    option.optionType === optionType && 
-    (filterText === '' || 
-     option.strikePrice.toString().includes(filterText) ||
-     option.openInterest.toString().includes(filterText))
+  // Filter and sort options
+  const filteredOptions = options.filter(option =>
+    option.optionType === optionType &&
+    (filterText === '' ||
+      option.strikePrice.toString().includes(filterText) ||
+      option.openInterest.toString().includes(filterText))
   ).sort((a, b) => a.strikePrice - b.strikePrice);
 
+  // Render individual option item
   const renderOptionItem = ({ item }: { item: OptionData }) => {
-    const inTheMoney = optionType === 'call' 
+    const inTheMoney = optionType === 'call'
       ? item.strikePrice < (stockPrice || 0)
       : item.strikePrice > (stockPrice || 0);
-    
+
     return (
       <TouchableOpacity
         onPress={() => {
@@ -155,12 +217,12 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
           });
         }}
       >
-        <DataTable.Row 
+        <DataTable.Row
           style={[
             styles.optionRow,
             inTheMoney && {
-              backgroundColor: isDarkMode 
-                ? 'rgba(46, 125, 50, 0.2)' 
+              backgroundColor: isDarkMode
+                ? 'rgba(46, 125, 50, 0.2)'
                 : 'rgba(46, 125, 50, 0.1)'
             }
           ]}
@@ -174,6 +236,7 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
     );
   };
 
+  // Loading state
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -189,14 +252,15 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
     );
   }
 
+  // Main render
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content title={`${symbol} Options`} />
-        <Appbar.Action 
-          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
-          onPress={toggleTheme} 
+        <Appbar.Action
+          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
+          onPress={toggleTheme}
         />
       </Appbar.Header>
 
@@ -207,16 +271,16 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
               <Text variant="headlineMedium">{symbol}</Text>
               <Text variant="headlineMedium">${stockPrice?.toFixed(2) || "N/A"}</Text>
             </View>
-            
+
             <View style={styles.expirationContainer}>
               <Text variant="bodyMedium" style={styles.label}>Expiration Date</Text>
-              
+
               <Menu
                 visible={menuVisible}
                 onDismiss={() => setMenuVisible(false)}
                 anchor={
-                  <Button 
-                    mode="outlined" 
+                  <Button
+                    mode="outlined"
                     onPress={() => setMenuVisible(true)}
                     icon="calendar"
                     style={styles.expirationButton}
@@ -240,7 +304,7 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
                 </ScrollView>
               </Menu>
             </View>
-            
+
             <SegmentedButtons
               value={optionType}
               onValueChange={(value) => setOptionType(value as 'call' | 'put')}
@@ -296,6 +360,7 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
 }
 
 const styles = StyleSheet.create({
+  // ... (styles remain the same as in the previous implementation)
   container: {
     flex: 1,
   },

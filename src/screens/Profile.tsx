@@ -1,6 +1,8 @@
+// app/(app)/profile.tsx
 import React, { useEffect, useState } from "react";
 import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from "react-native";
-import { supabase } from "../initSupabase";
+import { router } from "expo-router";
+import { supabase } from "src/initSupabase";
 import {
   Appbar,
   Text,
@@ -8,19 +10,21 @@ import {
   TextInput,
   Surface,
   useTheme,
+  List,
+  Divider
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAppTheme } from "../provider/ThemeProvider";
+import { useAppTheme } from "src/provider/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router"; // Import router instead of navigation
-import CustomText from "@/components/ui/CustomText";
+import WebSocketStatus from "src/components/WebSocketStatus";
 
-const Profile = () => {
+export default function Profile() {
   const paperTheme = useTheme();
   const { isDarkMode, toggleTheme } = useAppTheme();
   const [contributionAmount, setContributionAmount] = useState("777");
   const [targetDate, setTargetDate] = useState("2025-12-31");
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showWebSocketStatus, setShowWebSocketStatus] = useState(true);
   
   // Fetch user email when component mounts
   useEffect(() => {
@@ -57,6 +61,11 @@ const Profile = () => {
 
   const remainingMonths = monthlyContributions
     .filter(item => item.status === "upcoming").length;
+    
+  // Navigate to WebSocket settings
+  const goToWebSocketSettings = () => {
+    router.push('/websocket-settings');
+  };
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -71,7 +80,7 @@ const Profile = () => {
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.container}>
           <Surface style={styles.section} elevation={2}>
-            <CustomText variant="titleLarge" style={styles.sectionTitle}>Account Information</CustomText>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Account Information</Text>
             
             <View style={styles.profileInfo}>
               <View style={styles.profileAvatar}>
@@ -97,7 +106,7 @@ const Profile = () => {
           </Surface>
 
           <Surface style={styles.section} elevation={2}>
-            <CustomText variant="titleLarge" style={styles.sectionTitle}>Investment Plan</CustomText>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Investment Plan</Text>
             
             <View style={styles.planStats}>
               <View style={styles.statBox}>
@@ -147,9 +156,32 @@ const Profile = () => {
               </Button>
             </View>
           </Surface>
+          
+          {/* WebSocket Status Section */}
+          <Surface style={styles.section} elevation={2}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Data Connection</Text>
+            
+            {showWebSocketStatus && <WebSocketStatus showDetails={false} />}
+            
+            <List.Item
+              title="Real-time Data Settings"
+              description="Configure WebSocket connection preferences"
+              left={props => <List.Icon {...props} icon="access-point" />}
+              right={props => <List.Icon {...props} icon="chevron-right" />}
+              onPress={goToWebSocketSettings}
+            />
+            
+            <Divider style={{ marginVertical: 8 }} />
+            
+            <List.Item
+              title="API Usage"
+              description={`Current month: ${Math.floor(Math.random() * 80) + 20}/5000 calls`}
+              left={props => <List.Icon {...props} icon="api" />}
+            />
+          </Surface>
 
           <Surface style={[styles.section, { marginBottom: 30 }]} elevation={2}>
-            <CustomText variant="titleLarge" style={styles.sectionTitle}>Contribution Schedule</CustomText>
+            <Text variant="titleLarge" style={styles.sectionTitle}>Contribution Schedule</Text>
             
             <View style={styles.contributionList}>
               {monthlyContributions.map((contribution, index) => (
@@ -189,7 +221,7 @@ const Profile = () => {
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -245,5 +277,3 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
 });
-
-export default Profile;

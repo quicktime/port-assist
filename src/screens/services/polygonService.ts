@@ -50,6 +50,17 @@ export interface OptionData {
   greeks: OptionGreeks;
 }
 
+// Function to fetch market status
+export const fetchMarketStatus = async (): Promise<string> => {
+  try {
+    const state = polygonWebSocketService.getConnectionState(Market.STOCKS); // Ensure WebSocket is connected
+    return state || 'unknown';
+  } catch (error) {
+    console.error('Error fetching market status:', error);
+    throw error;
+  }
+};
+
 // Function to fetch current stock price
 export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
   try {
@@ -453,5 +464,100 @@ const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
         vega: 0
       }
     };
+  }
+};
+
+export const fetchCompanyDetails = async (symbol: string): Promise<any> => {
+  try {
+    const details = (await polygonRest.reference.tickerDetails(symbol.toUpperCase())).results;
+    return {
+      ticker: details?.ticker,
+      name: details?.name,
+      sector: details?.sic_description,
+      marketCap: details?.market_cap,
+      description: details?.description
+    }
+  } catch (error) {
+    console.error(`Error fetching company details for ${symbol}:`, error);
+    throw error;
+  }
+}
+
+export const fetchHistoricalPrices = async (
+  symbol: string, 
+  from: string, 
+  to: string, 
+  timespan: '1d' | '1h' | '1m' = '1d',
+  multiplier: number = 1
+): Promise<{
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}[]> => {
+  try {
+    const results = (await polygonRest.stocks.aggregates(
+      symbol.toUpperCase(), 
+      multiplier, 
+      timespan, 
+      from, 
+      to
+    )).results;
+
+    return (results ?? []).map((result: any) => ({
+      date: new Date(result.t).toISOString().split('T')[0],
+      open: result.o,
+      high: result.h,
+      low: result.l,
+      close: result.c,
+      volume: result.v
+    }));
+  } catch (error) {
+    console.error(`Error fetching historical prices for ${symbol}:`, error);
+    throw error;
+  }
+}
+
+export interface StockSearchResult {
+  ticker: string;
+  name: string;
+  market: string;
+  type: string;
+  primary_exchange?: string;
+  locale?: string;
+  active?: boolean;
+}
+
+export const searchStocks = async (query: string): Promise<StockSearchResult[]> => {
+  try {
+    const results = await polygonRest.reference.tickers({ search: query });
+
+    return (results.results ?? []).map((result: any) => ({
+      ticker: result.ticker,
+      name: result.name,
+      market: result.market,
+      type: result.type,
+      primary_exchange: result.primary_exchange,
+      locale: result.locale,
+      active: result.active
+    }));
+  } catch (error) {
+    console.error(`Error searching stocks with query ${query}:`, error);
+    throw error;
+  }
+};
+
+export const getStockSuggestions = async (
+  query: string, 
+  limit: number = 5
+): Promise<StockSearchResult[]> => {
+  try {
+    const results = await searchStocks(query);
+    return results.slice(0, limit);
+  } catch (error) {
+    console.error(`Error getting stock suggestions for ${query}:`, error);
+    return [];
   }
 };

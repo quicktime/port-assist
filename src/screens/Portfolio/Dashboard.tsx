@@ -58,7 +58,7 @@ export default function Dashboard() {
         
         // Get market status
         const status = await fetchMarketStatus();
-        setMarketStatus(status.market);
+        setMarketStatus(status);
         
         // Get portfolio summary
         const portfolio = await getPortfolioSummary();
