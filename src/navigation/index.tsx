@@ -5,7 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 
 import Main from './MainStack';
 import Auth from './AuthStack';
-import Loading from '../screens/utils/Loading';
+import Loading from '../utils/Loading';
 
 export default () => {
 	const auth = useContext(AuthContext);

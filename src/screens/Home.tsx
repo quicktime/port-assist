@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  View, 
-  Linking, 
-  ScrollView, 
-  Alert, 
-  ActivityIndicator, 
-  KeyboardAvoidingView, 
-  Platform, 
-  TouchableOpacity, 
+import {
+  View,
+  Linking,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
   FlatList,
   Modal
 } from "react-native";
@@ -26,7 +26,7 @@ import {
   TextInput,
 } from "react-native-rapi-ui";
 import { Ionicons } from "@expo/vector-icons";
-import { fetchStockSymbolSuggestions, fetchStockPriceFinnhub } from "../screens/utils/StockApis";
+import { fetchStockPriceFinnhub, fetchStockSymbolSuggestions } from "../utils/StockApis";
 
 // Define the stock interfaces
 interface StockEntry {
@@ -49,7 +49,7 @@ export default function ({
 }: NativeStackScreenProps<MainStackParamList, "MainTabs">) {
   const { isDarkmode, setTheme } = useTheme();
   const [portfolioItems, setPortfolioItems] = useState<StockEntry[]>([]);
-  
+
   // For adding new items
   const [newSymbol, setNewSymbol] = useState("");
   const [newShares, setNewShares] = useState("");
@@ -57,12 +57,12 @@ export default function ({
   const [newNotes, setNewNotes] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // For stock symbol suggestions
   const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
-  
+  const searchTimeout = useRef<any>(null);
+
   // Fetch portfolio data on load
   useEffect(() => {
     fetchPortfolio();
@@ -76,9 +76,9 @@ export default function ({
         .from("portfolio")
         .select("*")
         .order("symbol", { ascending: true });
-      
+
       if (error) throw error;
-      
+
       if (data) {
         // Update stock prices before setting the state
         const updatedItems = await Promise.all(
@@ -97,7 +97,7 @@ export default function ({
             }
           })
         );
-        
+
         setPortfolioItems(updatedItems);
       }
     } catch (error: any) {
@@ -109,26 +109,32 @@ export default function ({
 
   // Function to handle stock symbol input with debouncing
   const handleSymbolInput = (text: string) => {
+    console.log('Input changed:', text);
     setNewSymbol(text);
-    
+
     // Clear any existing timeout
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
-    
+
     // Set a new timeout to delay the API call until typing stops
     searchTimeout.current = setTimeout(async () => {
+      console.log('Timeout fired for:', text);
       // Don't fetch if the text is empty
       if (!text.trim()) {
+        console.log('Empty text, clearing suggestions');
         setSuggestions([]);
         setShowSuggestions(false);
         return;
       }
-      
+
       try {
+        console.log('Calling fetchStockSymbolSuggestions for:', text);
         const results = await fetchStockSymbolSuggestions(text);
+        console.log('Got suggestions:', results);
         setSuggestions(results);
         setShowSuggestions(results.length > 0);
+        console.log('showSuggestions set to:', results.length > 0);
       } catch (error) {
         console.error('Error handling symbol input:', error);
         setSuggestions([]);
@@ -157,44 +163,70 @@ export default function ({
     return "N/A";
   };
 
-  // Add a new stock to the portfolio
-  const addStock = async () => {
-    if (!newSymbol || !newShares || !newAvgPrice) {
-      Alert.alert("Missing Information", "Please fill in symbol, shares, and average price.");
-      return;
-    }
+// Add a new stock to the portfolio
+const addStock = async () => {
+  if (!newSymbol || !newShares || !newAvgPrice) {
+    Alert.alert("Missing Information", "Please fill in symbol, shares, and average price.");
+    return;
+  }
 
-    setIsLoading(true);
+  setIsLoading(true);
+  try {
+    // Get current price for the new stock
+    let currentPrice = null;
+    let targetPrice = null;
+    
     try {
-      const newItem: Omit<StockEntry, 'id' | 'currentPrice' | 'targetPrice'> = {
-        symbol: newSymbol.toUpperCase(),
-        shares: parseFloat(newShares),
-        avgPrice: parseFloat(newAvgPrice),
-        notes: newNotes
-      };
-
-      const { data, error } = await supabase
-        .from("portfolio")
-        .insert([newItem])
-        .select();
-
-      if (error) throw error;
-
-      // Clear form
-      setNewSymbol("");
-      setNewShares("");
-      setNewAvgPrice("");
-      setNewNotes("");
-      setIsAdding(false);
-      
-      // Refresh portfolio
-      fetchPortfolio();
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setIsLoading(false);
+      const priceData = await fetchStockPrice(newSymbol.toUpperCase());
+      currentPrice = priceData.currentPrice;
+      targetPrice = priceData.targetPrice;
+    } catch (priceError) {
+      console.error("Failed to fetch stock price:", priceError);
+      // Continue with null prices, we'll still add the stock
     }
-  };
+    
+    const newItem = {
+      symbol: newSymbol.toUpperCase(),
+      shares: parseFloat(newShares),
+      avgPrice: parseFloat(newAvgPrice),
+      currentPrice: currentPrice,
+      targetPrice: targetPrice,
+      notes: newNotes
+    };
+
+    console.log("Adding stock to Supabase:", newItem);
+
+    const { data, error } = await supabase
+      .from("portfolio")
+      .insert([newItem]);
+
+    if (error) {
+      console.error("Supabase insert error:", error);
+      throw error;
+    }
+
+    console.log("Stock added successfully:", data);
+    
+    // Clear form
+    setNewSymbol("");
+    setNewShares("");
+    setNewAvgPrice("");
+    setNewNotes("");
+    setIsAdding(false);
+    
+    // Refresh portfolio
+    fetchPortfolio();
+    
+    // Confirm to user
+    Alert.alert("Success", `${newItem.symbol} added to your portfolio.`);
+  } catch (error) {
+    console.error("Add stock error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to add stock";
+    Alert.alert("Error", errorMessage);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Delete a stock from the portfolio
   const deleteStock = async (id: string) => {
@@ -205,7 +237,7 @@ export default function ({
         .eq("id", id);
 
       if (error) throw error;
-      
+
       // Refresh portfolio
       fetchPortfolio();
     } catch (error: any) {
@@ -232,7 +264,7 @@ export default function ({
             isDarkmode ? setTheme("light") : setTheme("dark");
           }}
         />
-        
+
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
@@ -244,16 +276,16 @@ export default function ({
               <Text fontWeight="bold" size="h3" style={{ marginBottom: 10 }}>
                 My Portfolio
               </Text>
-              
+
               {isLoading ? (
                 <ActivityIndicator size="large" color={themeColor.primary} />
               ) : (
                 <>
                   {/* Portfolio Items Table Header */}
-                  <View style={{ 
-                    flexDirection: 'row', 
-                    borderBottomWidth: 1, 
-                    borderBottomColor: isDarkmode ? themeColor.white200 : themeColor.gray, 
+                  <View style={{
+                    flexDirection: 'row',
+                    borderBottomWidth: 1,
+                    borderBottomColor: isDarkmode ? themeColor.white200 : themeColor.gray,
                     paddingBottom: 5,
                     marginBottom: 10
                   }}>
@@ -265,7 +297,7 @@ export default function ({
                     <Text style={{ flex: 1, fontWeight: 'bold' }}>Upside</Text>
                     <Text style={{ width: 50 }}></Text>
                   </View>
-                  
+
                   {/* Portfolio Items */}
                   {portfolioItems.length === 0 ? (
                     <Text style={{ textAlign: 'center', marginVertical: 20 }}>
@@ -273,9 +305,9 @@ export default function ({
                     </Text>
                   ) : (
                     portfolioItems.map((item) => (
-                      <View 
-                        key={item.id} 
-                        style={{ 
+                      <View
+                        key={item.id}
+                        style={{
                           flexDirection: 'row',
                           alignItems: 'center',
                           paddingVertical: 10,
@@ -288,11 +320,11 @@ export default function ({
                         <Text style={{ flex: 1 }}>${item.avgPrice.toFixed(2)}</Text>
                         <Text style={{ flex: 1 }}>${item.currentPrice ? item.currentPrice.toFixed(2) : "N/A"}</Text>
                         <Text style={{ flex: 1 }}>${item.targetPrice ? item.targetPrice.toFixed(2) : "N/A"}</Text>
-                        <Text 
-                          style={{ 
-                            flex: 1, 
-                            color: item.currentPrice && item.targetPrice && item.targetPrice > item.currentPrice 
-                              ? 'green' 
+                        <Text
+                          style={{
+                            flex: 1,
+                            color: item.currentPrice && item.targetPrice && item.targetPrice > item.currentPrice
+                              ? 'green'
                               : 'red'
                           }}
                         >
@@ -308,14 +340,14 @@ export default function ({
                       </View>
                     ))
                   )}
-                  
+
                   {/* Add New Stock Form */}
                   {isAdding ? (
                     <View style={{ marginTop: 20 }}>
                       <Text fontWeight="bold" size="h3" style={{ marginBottom: 10 }}>
                         Add New Stock
                       </Text>
-                      
+
                       <View style={{ marginBottom: 10 }}>
                         <TextInput
                           containerStyle={{ marginBottom: 0 }}
@@ -324,26 +356,25 @@ export default function ({
                           onChangeText={handleSymbolInput}
                           autoCapitalize="characters"
                         />
-                        
+
                         {/* Stock Symbol Suggestions Dropdown */}
                         {showSuggestions && (
-                          <View style={{ 
-                            position: 'absolute', 
-                            top: 60, 
-                            left: 0, 
-                            right: 0, 
+                          <View style={{
                             backgroundColor: isDarkmode ? themeColor.dark100 : themeColor.white,
                             borderWidth: 1,
                             borderColor: isDarkmode ? themeColor.dark100 : themeColor.gray200,
                             borderRadius: 5,
-                            zIndex: 1000,
-                            maxHeight: 200,
+                            marginTop: 2,  // Small gap between input and suggestions
+                            maxHeight: 150,
+                            overflow: 'hidden', // Keep suggestions contained in the view
                           }}>
-                            <FlatList
-                              data={suggestions}
-                              keyExtractor={(item) => item.symbol}
-                              renderItem={({ item }) => (
+                            <ScrollView
+                              keyboardShouldPersistTaps="handled" // Important: allows tapping suggestions while keyboard is open
+                              nestedScrollEnabled={true} // Important for nested scrolling
+                            >
+                              {suggestions.map((item) => (
                                 <TouchableOpacity
+                                  key={item.symbol}
                                   style={{
                                     padding: 10,
                                     borderBottomWidth: 1,
@@ -354,12 +385,12 @@ export default function ({
                                   <Text fontWeight="bold">{item.symbol}</Text>
                                   <Text>{item.name}</Text>
                                 </TouchableOpacity>
-                              )}
-                            />
+                              ))}
+                            </ScrollView>
                           </View>
                         )}
                       </View>
-                      
+
                       <TextInput
                         containerStyle={{ marginBottom: 10 }}
                         placeholder="Number of Shares"
@@ -367,7 +398,7 @@ export default function ({
                         onChangeText={setNewShares}
                         keyboardType="numeric"
                       />
-                      
+
                       <TextInput
                         containerStyle={{ marginBottom: 10 }}
                         placeholder="Average Price ($)"
@@ -375,7 +406,7 @@ export default function ({
                         onChangeText={setNewAvgPrice}
                         keyboardType="numeric"
                       />
-                      
+
                       <TextInput
                         containerStyle={{ marginBottom: 15 }}
                         placeholder="Notes (optional)"
@@ -383,7 +414,7 @@ export default function ({
                         onChangeText={setNewNotes}
                         multiline
                       />
-                      
+
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Button
                           text="Cancel"
@@ -414,7 +445,7 @@ export default function ({
                       style={{ marginTop: 15 }}
                     />
                   )}
-                  
+
                   <Button
                     status="info"
                     text="Refresh Prices"
@@ -426,19 +457,19 @@ export default function ({
               )}
             </SectionContent>
           </Section>
-          
+
           {/* Portfolio Summary */}
           <Section style={{ marginTop: 20 }}>
             <SectionContent>
               <Text fontWeight="bold" size="h3" style={{ marginBottom: 10 }}>
                 Portfolio Summary
               </Text>
-              
+
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
                 <Text>Total Stocks:</Text>
                 <Text>{portfolioItems.length}</Text>
               </View>
-              
+
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
                 <Text>Total Value:</Text>
                 <Text>
@@ -450,25 +481,25 @@ export default function ({
                     .toFixed(2)}
                 </Text>
               </View>
-              
+
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text>Average Upside:</Text>
                 <Text>
                   {portfolioItems.length > 0
                     ? (
-                        portfolioItems.reduce((sum, item) => {
-                          if (item.currentPrice && item.targetPrice) {
-                            return sum + ((item.targetPrice - item.currentPrice) / item.currentPrice) * 100;
-                          }
-                          return sum;
-                        }, 0) / portfolioItems.filter(item => item.currentPrice && item.targetPrice).length
-                      ).toFixed(2) + "%"
+                      portfolioItems.reduce((sum, item) => {
+                        if (item.currentPrice && item.targetPrice) {
+                          return sum + ((item.targetPrice - item.currentPrice) / item.currentPrice) * 100;
+                        }
+                        return sum;
+                      }, 0) / portfolioItems.filter(item => item.currentPrice && item.targetPrice).length
+                    ).toFixed(2) + "%"
                     : "N/A"}
                 </Text>
               </View>
             </SectionContent>
           </Section>
-          
+
           <Button
             status="danger"
             text="Logout"

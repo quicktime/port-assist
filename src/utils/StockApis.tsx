@@ -38,7 +38,7 @@ const fetchStockPriceAlphaVantage = async (symbol: string) => {
   
   // Option 2: Finnhub API
   // Get a free API key at https://finnhub.io/
-  const fetchStockPriceFinnhub = async (symbol: string) => {
+  export const fetchStockPriceFinnhub = async (symbol: string) => {
     try {      
       // Get current price
       const quoteResponse = await fetch(
@@ -48,7 +48,7 @@ const fetchStockPriceAlphaVantage = async (symbol: string) => {
       
       // Get price target from analysts
       const targetResponse = await fetch(
-        `https://finnhub.io/api/v1/stock/price-target?symbol=${symbol}&token=${API_KEY}`
+        `https://finnhub.io/api/v1/stock/price-target?symbol=${symbol}&token=${FINNHUB_API_KEY}`
       );
       const targetData = await targetResponse.json();
       
@@ -170,7 +170,7 @@ const fetchStockPriceAlphaVantage = async (symbol: string) => {
   };
   
   // For stock symbol autocomplete suggestion (predictive text)
-  const fetchStockSymbolSuggestions = async (partialSymbol: string) => {
+  export const fetchStockSymbolSuggestions = async (partialSymbol: string) => {
     try {
       const response = await fetch(
         `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${partialSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
