@@ -1,31 +1,24 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
-import { 
-  MD3DarkTheme, 
-  MD3LightTheme, 
-  PaperProvider, 
-  adaptNavigationTheme 
-} from 'react-native-paper';
-import { 
-  NavigationContainer, 
-  DarkTheme as NavigationDarkTheme,
-  DefaultTheme as NavigationDefaultTheme 
-} from '@react-navigation/native';
+import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Combine Paper and Navigation themes
-const { LightTheme, DarkTheme } = adaptNavigationTheme({
-  reactNavigationLight: NavigationDefaultTheme,
-  reactNavigationDark: NavigationDarkTheme,
-});
+// Define font configuration
+const fontConfig = {
+  fontFamily: 'System',
+  // Make sure to include all expected weights
+  fontWeights: {
+    regular: '400',
+    medium: '500',
+    bold: '700',
+  },
+};
 
-// Customize the themes with your app's colors
-const CombinedDefaultTheme = {
+// Customize the light theme with your app's colors
+const CustomLightTheme = {
   ...MD3LightTheme,
-  ...LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    ...LightTheme.colors,
     primary: '#2196F3',
     secondary: '#03DAC6',
     tertiary: '#FF9800',
@@ -34,14 +27,17 @@ const CombinedDefaultTheme = {
     card: '#FFFFFF',
     text: '#000000',
   },
+  // Make sure we define all font variants
+  fonts: {
+    ...MD3LightTheme.fonts,
+  },
 };
 
-const CombinedDarkTheme = {
+// Customize the dark theme with your app's colors
+const CustomDarkTheme = {
   ...MD3DarkTheme,
-  ...DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,
-    ...DarkTheme.colors,
     primary: '#90CAF9',
     secondary: '#03DAC6',
     tertiary: '#FFCC80',
@@ -50,19 +46,23 @@ const CombinedDarkTheme = {
     card: '#1E1E1E',
     text: '#FFFFFF',
   },
+  // Make sure we define all font variants
+  fonts: {
+    ...MD3DarkTheme.fonts,
+  },
 };
 
 // Theme context
 type ThemeContextProps = {
   isDarkMode: boolean;
   toggleTheme: () => void;
-  theme: typeof CombinedDefaultTheme;
+  theme: typeof CustomLightTheme;
 };
 
 const ThemeContext = createContext<ThemeContextProps>({
   isDarkMode: false,
   toggleTheme: () => {},
-  theme: CombinedDefaultTheme,
+  theme: CustomLightTheme,
 });
 
 // Hook for using the theme
@@ -102,14 +102,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const theme = isDarkMode ? CombinedDarkTheme : CombinedDefaultTheme;
+  const theme = isDarkMode ? CustomDarkTheme : CustomLightTheme;
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme }}>
       <PaperProvider theme={theme}>
-        <NavigationContainer theme={theme}>
-          {children}
-        </NavigationContainer>
+        {children}
       </PaperProvider>
     </ThemeContext.Provider>
   );

@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../provider/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router"; // Import router instead of navigation
+import CustomText from "@/components/ui/CustomText";
 
 const About = () => {
   const paperTheme = useTheme();
@@ -61,7 +62,7 @@ const About = () => {
           </Surface>
           
           <Surface style={styles.section} elevation={2}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>Technologies Used</Text>
+            <CustomText variant="titleLarge" style={styles.sectionTitle}>Technologies Used</CustomText>
             
             <List.Item
               title="React Native"
@@ -103,7 +104,7 @@ const About = () => {
           </Surface>
           
           <Surface style={styles.section} elevation={2}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>Contact & Support</Text>
+            <CustomText variant="titleLarge" style={styles.sectionTitle}>Contact & Support</CustomText>
             
             <View style={styles.supportLinks}>
               <Button

@@ -7,33 +7,32 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '../src/hooks/useAuth';
 
 // Prevent the splash screen from auto-hiding
-SplashScreen.preventAutoHideAsync().catch(() => {
-  /* ignore errors */
-});
+SplashScreen.preventAutoHideAsync();
 
-// Root layout
+// Root layout for the app
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <RootLayoutWithAuth />
+          <RootLayoutNav />
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-function RootLayoutWithAuth() {
+// Navigation structure based on authentication
+function RootLayoutNav() {
   const { isLoading } = useAuth();
   
   useEffect(() => {
+    // Hide splash screen when auth state is determined
     if (!isLoading) {
-      SplashScreen.hideAsync().catch(() => {
-        /* ignore errors */
-      });
+      SplashScreen.hideAsync();
     }
   }, [isLoading]);
 
+  // Show Slot (child route) - Expo Router handles navigation internally
   return <Slot />;
 }

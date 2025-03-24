@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../provider/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router"; // Import router instead of navigation
+import CustomText from "@/components/ui/CustomText";
 
 const Profile = () => {
   const paperTheme = useTheme();
@@ -70,7 +71,7 @@ const Profile = () => {
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.container}>
           <Surface style={styles.section} elevation={2}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>Account Information</Text>
+            <CustomText variant="titleLarge" style={styles.sectionTitle}>Account Information</CustomText>
             
             <View style={styles.profileInfo}>
               <View style={styles.profileAvatar}>
@@ -96,7 +97,7 @@ const Profile = () => {
           </Surface>
 
           <Surface style={styles.section} elevation={2}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>Investment Plan</Text>
+            <CustomText variant="titleLarge" style={styles.sectionTitle}>Investment Plan</CustomText>
             
             <View style={styles.planStats}>
               <View style={styles.statBox}>
@@ -148,7 +149,7 @@ const Profile = () => {
           </Surface>
 
           <Surface style={[styles.section, { marginBottom: 30 }]} elevation={2}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>Contribution Schedule</Text>
+            <CustomText variant="titleLarge" style={styles.sectionTitle}>Contribution Schedule</CustomText>
             
             <View style={styles.contributionList}>
               {monthlyContributions.map((contribution, index) => (

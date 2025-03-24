@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getPortfolioWithCurrentPrices, getPortfolioSummary, PortfolioItem, deletePortfolioItem } from "../services/portfolioService";
 import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
+import CustomText from "@/components/ui/CustomText";
 
 export default function PortfolioScreen() {
   const { isDarkMode, toggleTheme } = useAppTheme();
@@ -110,7 +111,7 @@ export default function PortfolioScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <View style={styles.cardHeader}>
-              <Text variant="titleLarge">{item.symbol}</Text>
+              <CustomText variant="titleLarge">{item.symbol}</CustomText>
               <IconButton
                 icon="chart-line-variant"
                 size={20}
@@ -216,7 +217,7 @@ export default function PortfolioScreen() {
         </Surface>
 
         <View style={styles.holdingsHeader}>
-          <Text variant="titleLarge">Holdings</Text>
+          <CustomText variant="titleLarge">Holdings</CustomText>
           <Button
             mode="contained"
             onPress={handleAddStock}

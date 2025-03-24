@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MainStackParamList } from "../types/navigation";
 import { useAppTheme } from "../provider/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import CustomText from "@/components/ui/CustomText";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<MainStackParamList>;
 
@@ -41,9 +42,9 @@ const Home = () => {
         }}
       >
         <Surface style={{ width: '100%', padding: 16, borderRadius: 8, elevation: 4 }}>
-          <Text variant="titleLarge" style={{ textAlign: "center", marginBottom: 10 }}>
+          <CustomText variant="titleLarge" style={{ textAlign: "center", marginBottom: 10 }}>
             Investment Portfolio Tracker
-          </Text>
+          </CustomText>
           <Text variant="bodyMedium" style={{ textAlign: "center", marginBottom: 20 }}>
             Track your investments, monitor options data with greeks, and analyze your portfolio performance.
           </Text>
