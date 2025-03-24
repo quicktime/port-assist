@@ -1,5 +1,10 @@
 import { supabase } from '../../initSupabase';
-import { fetchStockPrice } from './polygonService';
+import { 
+  fetchStockPrice, 
+  fetchOptionsData, 
+  fetchOptionsExpirations, 
+  StockData 
+} from './polygonService';
 
 export interface PortfolioItem {
   id?: string;
@@ -18,6 +23,7 @@ export interface PortfolioItem {
   cost_basis?: number;
   profit_loss?: number;
   profit_loss_percent?: number;
+  allocation?: number;
 }
 
 // Fetch portfolio items for the current user
@@ -42,6 +48,15 @@ export const getPortfolio = async (): Promise<PortfolioItem[]> => {
 // Add a new item to the portfolio
 export const addPortfolioItem = async (item: PortfolioItem): Promise<PortfolioItem> => {
   try {
+    // Try to get current price from Polygon.io
+    let currentPrice = null;
+    try {
+      const stockData = await fetchStockPrice(item.symbol);
+      currentPrice = stockData.currentPrice;
+    } catch (priceError) {
+      console.warn(`Couldn't fetch current price for ${item.symbol}:`, priceError);
+    }
+    
     const { data, error } = await supabase
       .from('portfolio')
       .insert([
@@ -49,6 +64,7 @@ export const addPortfolioItem = async (item: PortfolioItem): Promise<PortfolioIt
           symbol: item.symbol,
           shares: item.shares,
           avg_price: item.avg_price,
+          current_price: currentPrice,
           target_price: item.target_price,
           notes: item.notes
         }
@@ -69,11 +85,21 @@ export const addPortfolioItem = async (item: PortfolioItem): Promise<PortfolioIt
 // Update an existing portfolio item
 export const updatePortfolioItem = async (item: PortfolioItem): Promise<PortfolioItem> => {
   try {
+    // Try to get updated price from Polygon.io
+    let currentPrice = null;
+    try {
+      const stockData = await fetchStockPrice(item.symbol);
+      currentPrice = stockData.currentPrice;
+    } catch (priceError) {
+      console.warn(`Couldn't fetch current price for ${item.symbol}:`, priceError);
+    }
+    
     const { data, error } = await supabase
       .from('portfolio')
       .update({
         shares: item.shares,
         avg_price: item.avg_price,
+        current_price: currentPrice || item.current_price,
         target_price: item.target_price,
         notes: item.notes
       })
@@ -108,31 +134,38 @@ export const deletePortfolioItem = async (id: string): Promise<void> => {
   }
 };
 
-// Get portfolio with current prices
+// Helper function to calculate portfolio metrics for a single item
+const calculatePortfolioItemMetrics = (item: PortfolioItem, currentPrice?: number): PortfolioItem => {
+  if (currentPrice && currentPrice > 0) {
+    const value = currentPrice * item.shares;
+    const cost_basis = item.avg_price * item.shares;
+    const profit_loss = value - cost_basis;
+    const profit_loss_percent = (profit_loss / cost_basis) * 100;
+    
+    return {
+      ...item,
+      current_price: currentPrice,
+      value,
+      cost_basis,
+      profit_loss,
+      profit_loss_percent
+    };
+  }
+  
+  return item;
+};
+
+// Get portfolio with current prices from Polygon.io
 export const getPortfolioWithCurrentPrices = async (): Promise<PortfolioItem[]> => {
   try {
     const portfolio = await getPortfolio();
     
-    // Fetch current prices for all symbols
+    // Fetch current prices for all symbols using Polygon.io
     const portfolioWithPrices = await Promise.all(
       portfolio.map(async (item) => {
         try {
           const stockData = await fetchStockPrice(item.symbol);
-          
-          const currentPrice = stockData.currentPrice;
-          const value = currentPrice * item.shares;
-          const cost_basis = item.avg_price * item.shares;
-          const profit_loss = value - cost_basis;
-          const profit_loss_percent = (profit_loss / cost_basis) * 100;
-          
-          return {
-            ...item,
-            current_price: currentPrice,
-            value,
-            cost_basis,
-            profit_loss,
-            profit_loss_percent
-          };
+          return calculatePortfolioItemMetrics(item, stockData.currentPrice);
         } catch (error) {
           console.error(`Error fetching price for ${item.symbol}:`, error);
           // Return the item without current price data
@@ -173,6 +206,37 @@ export const getPortfolioSummary = async () => {
     };
   } catch (error) {
     console.error('Error getting portfolio summary:', error);
+    throw error;
+  }
+};
+
+// Get historical prices for portfolio items
+export const getPortfolioHistoricalPrices = async (timeframe: string = 'month'): Promise<any> => {
+  try {
+    const portfolio = await getPortfolio();
+    const symbols = portfolio.map(item => item.symbol);
+    
+    // This function would need to be implemented in polygonService.ts
+    // to fetch historical price data for multiple symbols
+    // For now, this is a placeholder
+    
+    // Return mock data for now
+    return {
+      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+      datasets: symbols.map(symbol => ({
+        symbol,
+        data: [
+          Math.random() * 100 + 100,
+          Math.random() * 100 + 100,
+          Math.random() * 100 + 100,
+          Math.random() * 100 + 100,
+          Math.random() * 100 + 100,
+          Math.random() * 100 + 100
+        ]
+      }))
+    };
+  } catch (error) {
+    console.error('Error getting historical prices:', error);
     throw error;
   }
 };

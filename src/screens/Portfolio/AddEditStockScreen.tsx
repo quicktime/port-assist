@@ -1,6 +1,5 @@
-// src/screens/Portfolio/AddEditStockScreen.tsx
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, Alert, KeyboardAvoidingView, StyleSheet, Platform } from "react-native";
+import { View, ScrollView, Alert, KeyboardAvoidingView, StyleSheet, Platform, FlatList, TouchableOpacity } from "react-native";
 import {
   Appbar,
   Text,
@@ -10,32 +9,48 @@ import {
   ActivityIndicator,
   Chip,
   Divider,
+  Card,
+  Surface,
+  List
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { addPortfolioItem, updatePortfolioItem, PortfolioItem } from "../services/portfolioService";
-import { fetchStockPrice } from "../services/polygonService";
+import { fetchStockPrice, searchStocks } from "../services/polygonService";
 import { useAppTheme } from "../../provider/ThemeProvider";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { debounce } from 'lodash';
 
 type AddEditStockProps = {
   mode: 'add' | 'edit';
   item?: PortfolioItem;
 };
 
-export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
+export default function AddEditStockScreen({ mode = 'add' }) {
+  const params = useLocalSearchParams();
+  const isEditMode = mode === 'edit' || params.mode === 'edit';
+  let editItem: PortfolioItem | undefined;
+  
+  if (isEditMode && params.item) {
+    try {
+      editItem = JSON.parse(params.item as string) as PortfolioItem;
+    } catch (error) {
+      console.error("Error parsing portfolio item:", error);
+    }
+  }
+  
   const { isDarkMode, toggleTheme } = useAppTheme();
   const paperTheme = useTheme();
-  const isEditMode = mode === 'edit';
-  const editItem = isEditMode ? item : undefined;
   
   const [symbol, setSymbol] = useState(editItem?.symbol || "");
-  const [shares, setShares] = useState(editItem?.shares.toString() || "");
-  const [avgPrice, setAvgPrice] = useState(editItem?.avg_price.toString() || "");
+  const [shares, setShares] = useState(editItem?.shares?.toString() || "");
+  const [avgPrice, setAvgPrice] = useState(editItem?.avg_price?.toString() || "");
   const [targetPrice, setTargetPrice] = useState(editItem?.target_price?.toString() || "");
   const [notes, setNotes] = useState(editItem?.notes || "");
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingSymbol, setCheckingSymbol] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (isEditMode && editItem?.symbol) {
@@ -43,6 +58,7 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
     }
   }, [isEditMode, editItem]);
 
+  // Fetch the current price using Polygon.io API
   const fetchCurrentPrice = async (stockSymbol: string) => {
     if (!stockSymbol) return;
     
@@ -58,6 +74,7 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
     }
   };
 
+  // Validate the stock symbol
   const validateSymbol = async () => {
     if (!symbol) {
       Alert.alert("Error", "Please enter a stock symbol");
@@ -77,6 +94,7 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
     }
   };
 
+  // Handle check symbol button
   const handleCheckSymbol = async () => {
     if (!symbol) {
       Alert.alert("Error", "Please enter a stock symbol");
@@ -85,7 +103,46 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
     
     await fetchCurrentPrice(symbol);
   };
+  
+  // Search for stocks with debounce
+  const debouncedSearch = debounce(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    
+    try {
+      const results = await searchStocks(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Error searching stocks:", error);
+    } finally {
+      setSearching(false);
+    }
+  }, 500);
+  
+  // Handle symbol input change
+  const handleSymbolChange = (text: string) => {
+    const upperText = text.toUpperCase();
+    setSymbol(upperText);
+    
+    if (!isEditMode && upperText.length >= 2) {
+      setSearching(true);
+      debouncedSearch(upperText);
+    } else {
+      setSearchResults([]);
+    }
+  };
+  
+  // Handle selecting a stock from search results
+  const handleSelectStock = async (stock: any) => {
+    setSymbol(stock.symbol);
+    setSearchResults([]);
+    await fetchCurrentPrice(stock.symbol);
+  };
 
+  // Handle save button
   const handleSave = async () => {
     if (!symbol || !shares || !avgPrice) {
       Alert.alert("Error", "Please fill in all required fields");
@@ -134,6 +191,19 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
       setLoading(false);
     }
   };
+  
+  // Render a search result item
+  const renderSearchResultItem = ({ item }: { item: any }) => (
+    <TouchableOpacity onPress={() => handleSelectStock(item)}>
+      <List.Item
+        title={item.symbol}
+        description={item.name}
+        left={props => <List.Icon {...props} icon="chart-line" />}
+        right={props => <List.Icon {...props} icon="chevron-right" />}
+      />
+      <Divider />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -159,7 +229,7 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
                 placeholder="e.g., AAPL"
                 value={symbol}
                 autoCapitalize="characters"
-                onChangeText={setSymbol}
+                onChangeText={handleSymbolChange}
                 disabled={isEditMode}
                 style={styles.symbolInput}
               />
@@ -175,6 +245,31 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
                 </Button>
               )}
             </View>
+            
+            {/* Search results */}
+            {searching && (
+              <View style={styles.searchingContainer}>
+                <ActivityIndicator size="small" />
+                <Text style={styles.searchingText}>Searching...</Text>
+              </View>
+            )}
+            
+            {searchResults.length > 0 && !isEditMode && (
+              <Surface style={styles.searchResultsContainer} elevation={3}>
+                <FlatList
+                  data={searchResults}
+                  renderItem={renderSearchResultItem}
+                  keyExtractor={(item) => item.symbol}
+                  style={styles.searchResults}
+                  keyboardShouldPersistTaps="handled"
+                  ListHeaderComponent={
+                    <Text variant="bodySmall" style={styles.searchResultsHeader}>
+                      Select a stock:
+                    </Text>
+                  }
+                />
+              </Surface>
+            )}
             
             {currentPrice !== null && (
               <Chip 
@@ -208,6 +303,15 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
               style={styles.input}
               left={<TextInput.Affix text="$" />}
             />
+            
+            {/* Calculated cost basis */}
+            {shares && avgPrice && !isNaN(Number(shares)) && !isNaN(Number(avgPrice)) && (
+              <View style={styles.calculatedContainer}>
+                <Text variant="bodySmall">
+                  Cost Basis: ${(Number(shares) * Number(avgPrice)).toFixed(2)}
+                </Text>
+              </View>
+            )}
 
             <Text variant="bodyMedium" style={styles.label}>Target Price</Text>
             <TextInput
@@ -219,6 +323,23 @@ export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
               style={styles.input}
               left={<TextInput.Affix text="$" />}
             />
+
+            {/* Potential return calculation */}
+            {shares && avgPrice && targetPrice && 
+             !isNaN(Number(shares)) && !isNaN(Number(avgPrice)) && !isNaN(Number(targetPrice)) && (
+              <View style={styles.calculatedContainer}>
+                <Text 
+                  variant="bodySmall"
+                  style={{
+                    color: Number(targetPrice) > Number(avgPrice) 
+                      ? paperTheme.colors.primary 
+                      : paperTheme.colors.error
+                  }}
+                >
+                  Potential Return: {(((Number(targetPrice) / Number(avgPrice)) - 1) * 100).toFixed(2)}%
+                </Text>
+              </View>
+            )}
 
             <Text variant="bodyMedium" style={styles.label}>Notes</Text>
             <TextInput
@@ -275,6 +396,28 @@ const styles = StyleSheet.create({
   checkButton: {
     marginTop: 4, // Align better with TextInput
   },
+  searchingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  searchingText: {
+    marginLeft: 8,
+    opacity: 0.7,
+  },
+  searchResultsContainer: {
+    marginTop: 8,
+    borderRadius: 8,
+    maxHeight: 250,
+  },
+  searchResults: {
+    padding: 8,
+  },
+  searchResultsHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    opacity: 0.7,
+  },
   priceChip: {
     marginTop: 10,
     alignSelf: 'flex-start',
@@ -283,7 +426,11 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   input: {
+    marginBottom: 8,
+  },
+  calculatedContainer: {
     marginBottom: 16,
+    alignItems: 'flex-end',
   },
   notesInput: {
     marginBottom: 24,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { View, FlatList, RefreshControl, TouchableOpacity, Alert, StyleSheet } from "react-native";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
+import { router } from "expo-router";
 import {
   Appbar,
   Text,
@@ -11,13 +12,13 @@ import {
   useTheme,
   IconButton,
   Divider,
-  ActivityIndicator
+  ActivityIndicator,
+  Badge
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getPortfolioWithCurrentPrices, getPortfolioSummary, PortfolioItem, deletePortfolioItem } from "../services/portfolioService";
-import { MainStackParamList } from "../../types/navigation";
+import { fetchMarketStatus } from "../services/polygonService";
 import { useAppTheme } from "../../provider/ThemeProvider";
-import CustomText from "@/components/ui/CustomText";
 
 export default function PortfolioScreen() {
   const { isDarkMode, toggleTheme } = useAppTheme();
@@ -30,13 +31,22 @@ export default function PortfolioScreen() {
     totalProfitPercent: 0
   });
   const [refreshing, setRefreshing] = useState(false);
-  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
-
+  const [loading, setLoading] = useState(true);
+  const [marketStatus, setMarketStatus] = useState<string>("unknown");
+  
   const loadPortfolio = async () => {
     try {
+      setLoading(true);
+      
+      // Get market status
+      const status = await fetchMarketStatus();
+      setMarketStatus(status.market);
+      
+      // Get portfolio data
       const portfolioData = await getPortfolioWithCurrentPrices();
       setPortfolio(portfolioData);
       
+      // Get summary
       const summaryData = await getPortfolioSummary();
       setSummary({
         totalValue: summaryData.totalValue,
@@ -47,6 +57,8 @@ export default function PortfolioScreen() {
     } catch (error) {
       console.error("Error loading portfolio:", error);
       Alert.alert("Error", "Failed to load portfolio data");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -63,11 +75,14 @@ export default function PortfolioScreen() {
   );
 
   const handleAddStock = () => {
-    navigation.navigate("AddStock");
+    router.push('/add-stock');
   };
 
   const handleEditStock = (item: PortfolioItem) => {
-    navigation.navigate("EditStock", { item });
+    router.push({
+      pathname: '/edit-stock',
+      params: { item: JSON.stringify(item) }
+    });
   };
 
   const handleDeleteStock = async (id?: string) => {
@@ -96,7 +111,11 @@ export default function PortfolioScreen() {
   };
 
   const handleViewOptions = (symbol: string) => {
-    navigation.navigate("OptionsChain", { symbol });
+    router.push(`/options-chain/${symbol}`);
+  };
+
+  const handleViewCompanyDetails = (symbol: string) => {
+    router.push(`/company-details/${symbol}` as any);
   };
 
   const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => {
@@ -111,12 +130,24 @@ export default function PortfolioScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <View style={styles.cardHeader}>
-              <CustomText variant="titleLarge">{item.symbol}</CustomText>
-              <IconButton
-                icon="chart-line-variant"
-                size={20}
-                onPress={() => handleViewOptions(item.symbol)}
-              />
+              <View style={styles.symbolContainer}>
+                <Text variant="titleLarge">{item.symbol}</Text>
+                <Text variant="bodySmall" style={styles.allocation}>
+                  {item.allocation?.toFixed(1)}% of portfolio
+                </Text>
+              </View>
+              <View style={styles.actionButtons}>
+                <IconButton
+                  icon="chart-line-variant"
+                  size={20}
+                  onPress={() => handleViewOptions(item.symbol)}
+                />
+                <IconButton
+                  icon="information-outline"
+                  size={20}
+                  onPress={() => handleViewCompanyDetails(item.symbol)}
+                />
+              </View>
             </View>
             
             <Divider style={styles.divider} />
@@ -137,6 +168,16 @@ export default function PortfolioScreen() {
                 {isProfitable ? "+" : ""}{item.profit_loss_percent?.toFixed(2)}% (${item.profit_loss?.toFixed(2)})
               </Text>
             </View>
+            
+            {item.target_price && (
+              <View style={styles.targetPriceContainer}>
+                <Text variant="bodySmall">
+                  Target: ${item.target_price.toFixed(2)} ({item.current_price 
+                    ? ((item.target_price / item.current_price - 1) * 100).toFixed(2) + '% away' 
+                    : 'N/A'})
+                </Text>
+              </View>
+            )}
           </Card.Content>
         </Card>
       </TouchableOpacity>
@@ -154,7 +195,8 @@ export default function PortfolioScreen() {
         value: 1625,
         cost_basis: 1575,
         profit_loss: 50,
-        profit_loss_percent: 3.17
+        profit_loss_percent: 3.17,
+        allocation: 38.0
       },
       {
         symbol: "ACHR",
@@ -164,7 +206,8 @@ export default function PortfolioScreen() {
         value: 1345,
         cost_basis: 1233,
         profit_loss: 112,
-        profit_loss_percent: 9.08
+        profit_loss_percent: 9.08,
+        allocation: 31.5
       },
       {
         symbol: "HOOD",
@@ -174,12 +217,31 @@ export default function PortfolioScreen() {
         value: 1740,
         cost_basis: 1771.20,
         profit_loss: -31.20,
-        profit_loss_percent: -1.76
+        profit_loss_percent: -1.76,
+        allocation: 30.5
       }
     ];
   };
 
   const displayedPortfolio = portfolio.length > 0 ? portfolio : getSampleData();
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Appbar.Header>
+          <Appbar.Content title="Portfolio" />
+          <Appbar.Action 
+            icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
+            onPress={toggleTheme} 
+          />
+        </Appbar.Header>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+          <Text style={{ marginTop: 16 }}>Loading portfolio data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -193,6 +255,21 @@ export default function PortfolioScreen() {
 
       <View style={styles.content}>
         <Surface style={styles.summaryCard} elevation={1}>
+          <View style={styles.marketStatusContainer}>
+            <Text variant="bodySmall">Market: </Text>
+            <Badge 
+              style={{ 
+                backgroundColor: marketStatus === 'open' 
+                  ? paperTheme.colors.primary
+                  : marketStatus === 'closed'
+                    ? paperTheme.colors.error
+                    : paperTheme.colors.secondary
+              }}
+            >
+              {marketStatus === 'open' ? 'Open' : marketStatus === 'closed' ? 'Closed' : 'Extended Hours'}
+            </Badge>
+          </View>
+          
           <View style={styles.summaryRow}>
             <Text variant="titleMedium">Total Value</Text>
             <Text variant="titleMedium">${summary.totalValue.toFixed(2)}</Text>
@@ -217,7 +294,7 @@ export default function PortfolioScreen() {
         </Surface>
 
         <View style={styles.holdingsHeader}>
-          <CustomText variant="titleLarge">Holdings</CustomText>
+          <Text variant="titleLarge">Holdings</Text>
           <Button
             mode="contained"
             onPress={handleAddStock}
@@ -262,10 +339,20 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   summaryCard: {
     padding: 16,
     marginTop: 16,
     borderRadius: 8,
+  },
+  marketStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   summaryRow: {
     flexDirection: "row",
@@ -294,6 +381,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
+  symbolContainer: {
+    flex: 1,
+  },
+  allocation: {
+    opacity: 0.8,
+    marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+  },
   divider: {
     marginVertical: 8,
   },
@@ -301,6 +398,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 8,
+  },
+  targetPriceContainer: {
+    marginTop: 8,
+    alignItems: 'flex-end',
   },
   emptyState: {
     alignItems: "center",
