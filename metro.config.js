@@ -1,13 +1,15 @@
 // Learn more https://docs.expo.io/guides/customizing-metro
 const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Add additional file extensions for proper SVG support
+// Handle Windows path separators
 config.resolver.sourceExts.push('svg');
-
-// Add necessary assetExts for Polygon.io API
 config.resolver.assetExts.push('pem', 'cert');
+
+// Fix path resolution for Windows
+config.watchFolders = [path.resolve(__dirname)];
 
 module.exports = config;
