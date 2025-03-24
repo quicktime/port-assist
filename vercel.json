@@ -2,27 +2,22 @@
     "version": 2,
     "builds": [
       {
-        "src": "web-build/**/*",
+        "src": "dist/**/*",
         "use": "@vercel/static"
       }
     ],
     "routes": [
       {
         "src": "/(.*)",
-        "dest": "/web-build/$1"
+        "dest": "/dist/$1"
       },
       {
         "src": "/(.+\\.[a-z]+)$",
-        "dest": "/web-build/$1"
+        "dest": "/dist/$1"
       },
       {
         "src": "/(.*)",
-        "dest": "/web-build/index.html"
+        "dest": "/dist/index.html"
       }
-    ],
-    "env": {
-      "SUPABASE_URL": "@supabase_url",
-      "SUPABASE_KEY": "@supabase_key",
-      "POLYGON_API_KEY": "@polygon_api_key"
-    }
+    ]
   }
