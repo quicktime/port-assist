@@ -1,0 +1,44 @@
+{
+    "cli": {
+      "version": ">= 3.13.3"
+    },
+    "build": {
+      "development": {
+        "developmentClient": true,
+        "distribution": "internal",
+        "ios": {
+          "resourceClass": "medium"
+        }
+      },
+      "preview": {
+        "distribution": "internal",
+        "ios": {
+          "resourceClass": "medium"
+        },
+        "env": {
+          "SUPABASE_URL": "YOUR_SUPABASE_URL",
+          "SUPABASE_KEY": "YOUR_SUPABASE_KEY",
+          "POLYGON_API_KEY": "YOUR_POLYGON_API_KEY"
+        }
+      },
+      "production": {
+        "ios": {
+          "resourceClass": "medium"
+        },
+        "env": {
+          "SUPABASE_URL": "YOUR_SUPABASE_URL",
+          "SUPABASE_KEY": "YOUR_SUPABASE_KEY",
+          "POLYGON_API_KEY": "YOUR_POLYGON_API_KEY"
+        }
+      }
+    },
+    "submit": {
+      "production": {
+        "ios": {
+          "appleId": "YOUR_APPLE_ID",
+          "ascAppId": "YOUR_ASC_APP_ID",
+          "appleTeamId": "YOUR_APPLE_TEAM_ID"
+        }
+      }
+    }
+  }

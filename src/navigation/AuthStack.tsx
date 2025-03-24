@@ -5,7 +5,13 @@ import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
 import ForgetPassword from "../screens/auth/ForgetPassword";
 
-const AuthStack = createNativeStackNavigator();
+type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  ForgetPassword: undefined;
+};
+
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Auth = () => {
   return (
     <AuthStack.Navigator

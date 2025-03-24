@@ -1,14 +1,69 @@
-node_modules/**/*
-.expo/*
-npm-debug.*
+# Expo
+.expo/
+dist/
+web-build/
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
 *.orig.*
-web-build/
-.env
+
+# Node
+node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
 # macOS
 .DS_Store
+*.pem
+
+# local env files
+.env*.local
+.env
+.env.development
+.env.test
+.env.production
+
+# typescript
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vercel
+.vercel
+.now
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Android
+android/app/debug.keystore
+android/app/release.keystore
+android/app/src/main/assets/shell-app-manifest.json
+android/app/src/main/assets/shell-app.bundle
+android/app/src/main/res/drawable-*/shell_launch_background_image.png
+android/app/src/main/res/values/strings.xml
+android/app/src/main/res/drawable/splashscreen_image.png
+
+# iOS
+ios/Pods/
+ios/build/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
+ios/Podfile.lock
+
+# testing
+/coverage

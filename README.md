@@ -1,106 +1,112 @@
-# Template bottom tabs with auth flow (Typescript)
+# Investment Portfolio Tracker
 
-Typescript Template starter with React Navigation Bottom Tabs and Supabase auth using React Context
+A cross-platform investment portfolio tracking application built with React Native, Expo, Supabase, and Polygon.io. Track your portfolio, monitor performance, and analyze options with greeks and open interest data.
 
-# Preview
+## Features
 
-![media/authflow.png](media/authflow.png)
+- Portfolio tracking with real-time market data
+- Options chain viewer with greeks (delta, gamma, theta, vega, rho)
+- Open interest and volume metrics for options
+- Dark/light theme support
+- Cross-platform (iOS, Android, Web)
+- User authentication with Supabase
 
-# Installation
+## Technology Stack
 
-1. Install [node.js](https://nodejs.org/en/)
-2. Install Expo
+- **Frontend**: React Native with Expo
+- **UI Components**: React Native Rapi UI
+- **Navigation**: React Navigation v6
+- **Backend**: Supabase (PostgreSQL + OrioleDB)
+- **Authentication**: Supabase Auth
+- **Market Data**: Polygon.io API
+- **Web Deployment**: Vercel
 
-   ```jsx
-   npm install --global expo-cli
-   ```
+## Setup Instructions
 
-3. Download this repo
-4. Install deps on your template folder
+### Prerequisites
 
-   ```jsx
+- Node.js (v14 or higher)
+- npm or yarn
+- Expo CLI (`npm install -g expo-cli`)
+- Supabase account
+- Polygon.io API key
+
+### Environment Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
    npm install
+   # or
+   yarn install
+   ```
+3. Create a `.env` file in the project root with the following variables:
+   ```
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_KEY=your_supabase_anon_key
+   POLYGON_API_KEY=your_polygon_api_key
    ```
 
-5. Start the environtment
+### Database Setup
 
-   ```jsx
-   expo start
+1. Log in to Supabase dashboard
+2. Create a new project
+3. Execute the SQL commands from `Supabase Portfolio Table Setup.txt` in the SQL editor
+
+### Running the App
+
+```bash
+# Start the development server
+npm start
+# or
+yarn start
+
+# Run on iOS simulator
+npm run ios
+# or
+yarn ios
+
+# Run on Android emulator
+npm run android
+# or
+yarn android
+
+# Run the web version
+npm run web
+# or
+yarn web
+```
+
+## Deploying to Vercel
+
+1. Build the web version:
+   ```bash
+   npm run build:web
+   # or
+   yarn build:web
    ```
 
-# Auth Flow
+2. Install Vercel CLI if not already installed:
+   ```bash
+   npm install -g vercel
+   ```
 
-### Supabase Setup
+3. Set up environment variables in Vercel:
+   - Add your Supabase and Polygon.io API keys as secrets
+   - Link them to the environment variables defined in vercel.json
 
-- Set up a new Supabase.io project
-- Fill your supabase credentials to your config inside `./src/initSupabase.ts`
-- You can find your supabase credentials in your project -> settings -> API
+4. Deploy using the deployment script:
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
+   
+## Monthly Investment Plan
 
-  ```jsx
-  // Better put your these secret keys in .env file
-  export const supabase = createClient(
-  	"supabaseUrl", "supabaseKey",
-  	{
-  		localStorage: AsyncStorage as any,
-  	}
-  );
-  ```
+The app is designed to accommodate your investment strategy:
+- Current portfolio: 100 shares RXRX, 100 shares ACHR, 80 shares HOOD
+- Monthly investment: $777 until the end of 2025
 
-and you good to go!
+## License
 
-### Prebuilt UI Screens
-
-There are 3 screens included inside `./src/screens/auth` and one more thing its included with the supabase auth function, so you don't need to create the function. The ilustrations I use [undraw](https://undraw.co/)
-
-- Login screen `./src/screens/auth/login.tsx`
-- Register screen `./src/screens/auth/register.tsx`
-- Forget password screen `./src/screens/auth/forget.tsx`
-
-### React Navigation Auth Flow
-
-The checking logged users process is inside `./src/provider/AuthProvider` I use React Context, you can add more functions like get the data of the user and store it to the context (better static data, ex: uid)
-
-Inside the navigator `./src/navigation/AppNavigator.js`
-There's 2 stack navigator :
-
-- `<Auth/>` → for not logged in users stack
-- `<Main/>` → for logged in users stack
-- `<Loading/>` → when checking if the user is logged in or not loading screen
-
-```jsx
-export default () => {
-	const auth = useContext(AuthContext);
-	const user = auth.user;
-	return (
-		<NavigationContainer>
-			{user == null && <Loading />}
-			{user == false && <Auth />}
-			{user == true && <Main />}
-		</NavigationContainer>
-	);
-};
-```
-
-# Rapi UI
-
-![../media/hero.png](../media/hero.png)
-
-These UI components are provided by [Rapi UI](https://rapi-ui.kikiding.space/).
-Check the [documentation](https://rapi-ui.kikiding.space/docs/) for usage and more components.
-
-# File Managements
-
-These are the folders and the functionality all in `src/`
-
-```jsx
-/src/assets -> for media such as images, etc
-/src/components -> for components
-/src/navigation -> for React Navigation
-/src/provider -> for React Context
-/src/screens -> for Screens
-/src/types -> for Types
-```
-
-if you find these useful don't forget to give it a star ⭐ and share it to your friends ❤️
-
-Reach me on [twitter](https://twitter.com/kikiding/)
+MIT

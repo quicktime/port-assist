@@ -1,19 +1,16 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+
 import { themeColor, useTheme } from "react-native-rapi-ui";
 import TabBarIcon from "../components/utils/TabBarIcon";
 import TabBarText from "../components/utils/TabBarText";
+
 import Home from "../screens/Home";
+import Portfolio from "../screens/Portfolio/PortfolioScreen"; // New Portfolio screen
 import About from "../screens/About";
 import Profile from "../screens/Profile";
-import { MainTabsParamList } from "../types/navigation";
 
-// Properly type the tab navigator
-const Tabs = createBottomTabNavigator<MainTabsParamList>();
-
-// Type definition for the components to ensure they match the navigator's expectations
-type ScreenComponentType = React.ComponentType<any>;
-
+const Tabs = createBottomTabNavigator();
 const MainTabs = () => {
   const { isDarkmode } = useTheme();
   return (
@@ -29,19 +26,31 @@ const MainTabs = () => {
       {/* these icons using Ionicons */}
       <Tabs.Screen
         name="Home"
-        component={Home as ScreenComponentType}
+        component={Home}
         options={{
           tabBarLabel: ({ focused }) => (
             <TabBarText focused={focused} title="Home" />
           ),
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon focused={focused} icon={"home"} />
+            <TabBarIcon focused={focused} icon={"md-home"} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="Portfolio"
+        component={Portfolio}
+        options={{
+          tabBarLabel: ({ focused }) => (
+            <TabBarText focused={focused} title="Portfolio" />
+          ),
+          tabBarIcon: ({ focused }) => (
+            <TabBarIcon focused={focused} icon={"trending-up"} />
           ),
         }}
       />
       <Tabs.Screen
         name="Profile"
-        component={Profile as ScreenComponentType}
+        component={Profile}
         options={{
           tabBarLabel: ({ focused }) => (
             <TabBarText focused={focused} title="Profile" />
@@ -53,13 +62,13 @@ const MainTabs = () => {
       />
       <Tabs.Screen
         name="About"
-        component={About as ScreenComponentType}
+        component={About}
         options={{
           tabBarLabel: ({ focused }) => (
             <TabBarText focused={focused} title="About" />
           ),
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon focused={focused} icon={"information-circle"} />
+            <TabBarIcon focused={focused} icon={"ios-information-circle"} />
           ),
         }}
       />

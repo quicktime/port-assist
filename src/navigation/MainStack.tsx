@@ -1,15 +1,15 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
 import SecondScreen from "../screens/SecondScreen";
 import MainTabs from "./MainTabs";
-import { MainStackParamList } from "../types/navigation";
 
-// Properly type the stack navigator
-const MainStack = createNativeStackNavigator<MainStackParamList>();
+// Import new portfolio screens
+import AddEditStockScreen from "../screens/Portfolio/AddEditStockScreen";
+import OptionsChainScreen from "../screens/Portfolio/OptionsChainScreen";
+import OptionDetailScreen from "../screens/Portfolio/OptionDetailScreen";
 
-// Type definition for the components
-type ScreenComponentType = React.ComponentType<any>;
-
+const MainStack = createNativeStackNavigator();
 const Main = () => {
   return (
     <MainStack.Navigator
@@ -17,14 +17,14 @@ const Main = () => {
         headerShown: false,
       }}
     >
-      <MainStack.Screen 
-        name="MainTabs" 
-        component={MainTabs as ScreenComponentType} 
-      />
-      <MainStack.Screen 
-        name="SecondScreen" 
-        component={SecondScreen as ScreenComponentType} 
-      />
+      <MainStack.Screen name="MainTabs" component={MainTabs} />
+      <MainStack.Screen name="SecondScreen" component={SecondScreen} />
+      
+      {/* Portfolio related screens */}
+      <MainStack.Screen name="AddStock" component={AddEditStockScreen} />
+      <MainStack.Screen name="EditStock" component={AddEditStockScreen} />
+      <MainStack.Screen name="OptionsChain" component={OptionsChainScreen} />
+      <MainStack.Screen name="OptionDetail" component={OptionDetailScreen} />
     </MainStack.Navigator>
   );
 };
