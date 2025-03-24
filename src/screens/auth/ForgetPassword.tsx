@@ -28,18 +28,19 @@ export default function ({
 
   async function forget() {
     setLoading(true);
-    const { data, error } = await supabase.auth.api.resetPasswordForEmail(
-      email
-    );
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'yourapp://reset-password',
+    });
+    
     if (!error) {
       setLoading(false);
       alert("Check your email to reset your password!");
-    }
-    if (error) {
+    } else {
       setLoading(false);
       alert(error.message);
     }
   }
+  
   return (
     <KeyboardAvoidingView behavior="height" enabled style={{ flex: 1 }}>
       <Layout>
@@ -89,7 +90,7 @@ export default function ({
               placeholder="Enter your email"
               value={email}
               autoCapitalize="none"
-              autoCompleteType="off"
+              autoComplete="email"
               autoCorrect={false}
               keyboardType="email-address"
               onChangeText={(text) => setEmail(text)}

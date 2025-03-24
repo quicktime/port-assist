@@ -11,7 +11,7 @@ import {
 } from "react-native-rapi-ui";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function ({
+export default function SecondScreen({
   navigation,
 }: NativeStackScreenProps<MainStackParamList, "SecondScreen">) {
   const { isDarkmode, setTheme } = useTheme();

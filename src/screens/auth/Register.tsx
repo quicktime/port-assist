@@ -29,19 +29,23 @@ export default function ({
 
   async function register() {
     setLoading(true);
-    const { user, error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
     });
-    if (!error && !user) {
+    
+    if (!error && !data.user) {
       setLoading(false);
       alert("Check your email for the login link!");
-    }
-    if (error) {
+    } else if (error) {
       setLoading(false);
       alert(error.message);
+    } else {
+      setLoading(false);
+      // Successfully signed up with user data available in data.user
     }
   }
+  
   return (
     <KeyboardAvoidingView behavior="height" enabled style={{ flex: 1 }}>
       <Layout>
@@ -91,7 +95,7 @@ export default function ({
               placeholder="Enter your email"
               value={email}
               autoCapitalize="none"
-              autoCompleteType="off"
+              autoComplete="email"
               autoCorrect={false}
               keyboardType="email-address"
               onChangeText={(text) => setEmail(text)}
@@ -103,7 +107,7 @@ export default function ({
               placeholder="Enter your password"
               value={password}
               autoCapitalize="none"
-              autoCompleteType="off"
+              autoComplete="password"
               autoCorrect={false}
               secureTextEntry={true}
               onChangeText={(text) => setPassword(text)}

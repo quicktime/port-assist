@@ -26,7 +26,7 @@ import {
   TextInput,
 } from "react-native-rapi-ui";
 import { Ionicons } from "@expo/vector-icons";
-import { fetchStockPriceFinnhub, fetchStockSymbolSuggestions } from "../utils/StockApis";
+import { fetchStockPriceAndTarget, fetchStockSymbolSuggestions } from "../utils/StockApis";
 
 // Define the stock interfaces
 interface StockEntry {
@@ -68,40 +68,102 @@ export default function ({
     fetchPortfolio();
   }, []);
 
-  // Function to fetch portfolio from Supabase
+  // Fetch portfolio function
   const fetchPortfolio = async () => {
     setIsLoading(true);
     try {
+      // Get the current user session first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("Session error:", sessionError);
+        throw sessionError;
+      }
+
+      if (!session || !session.user) {
+        console.error("No active session found");
+        throw new Error("User not authenticated");
+      }
+
+      console.log("Fetching portfolio for user:", session.user.id);
+
+      // Then fetch only this user's portfolio items
       const { data, error } = await supabase
         .from("portfolio")
         .select("*")
+        .eq("user_id", session.user.id) // This ensures you only get items for the current user
         .order("symbol", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Portfolio fetch error:", error);
+        throw error;
+      }
 
       if (data) {
+        console.log(`Found ${data.length} portfolio items`);
+
         // Update stock prices before setting the state
         const updatedItems = await Promise.all(
           data.map(async (item) => {
             try {
               // Get current price from API
               const priceData = await fetchStockPrice(item.symbol);
+              
+              // Update the price in the database
+              if (priceData.currentPrice !== null || priceData.targetPrice !== null) {
+                const updateData: any = {};
+                if (priceData.currentPrice !== null) {
+                  updateData.current_price = priceData.currentPrice;
+                }
+                if (priceData.targetPrice !== null) {
+                  updateData.target_price = priceData.targetPrice;
+                }
+                
+                // Only update if we have new data
+                if (Object.keys(updateData).length > 0) {
+                  const { error: updateError } = await supabase
+                    .from("portfolio")
+                    .update(updateData)
+                    .eq("id", item.id);
+                    
+                  if (updateError) {
+                    console.error(`Failed to update prices in database for ${item.symbol}:`, updateError);
+                  } else {
+                    console.log(`Updated prices in database for ${item.symbol}`);
+                  }
+                }
+              }
+              
               return {
-                ...item,
+                id: item.id,
+                symbol: item.symbol,
+                shares: item.shares,
+                avgPrice: item.avg_price,
                 currentPrice: priceData.currentPrice,
-                targetPrice: priceData.targetPrice
+                targetPrice: priceData.targetPrice,
+                notes: item.notes || ""
               };
             } catch (err) {
               console.error(`Failed to fetch price for ${item.symbol}:`, err);
-              return item;
+              return {
+                id: item.id,
+                symbol: item.symbol,
+                shares: item.shares,
+                avgPrice: item.avg_price,
+                currentPrice: item.current_price,
+                targetPrice: item.target_price,
+                notes: item.notes || ""
+              };
             }
           })
         );
 
         setPortfolioItems(updatedItems);
       }
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch portfolio";
+      console.error("Portfolio error:", errorMessage);
+      Alert.alert("Error", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -149,9 +211,9 @@ export default function ({
     setShowSuggestions(false);
   };
 
-  // Function to fetch stock price using the imported Finnhub API function
+  // Function to fetch stock price and target price using the updated API functions
   const fetchStockPrice = async (symbol: string) => {
-    return fetchStockPriceFinnhub(symbol);
+    return fetchStockPriceAndTarget(symbol);
   };
 
   // Calculate upside percentage
@@ -163,85 +225,121 @@ export default function ({
     return "N/A";
   };
 
-// Add a new stock to the portfolio
-const addStock = async () => {
-  if (!newSymbol || !newShares || !newAvgPrice) {
-    Alert.alert("Missing Information", "Please fill in symbol, shares, and average price.");
-    return;
-  }
+  // Add stock function
+  const addStock = async () => {
+    if (!newSymbol || !newShares || !newAvgPrice) {
+      Alert.alert("Missing Information", "Please fill in symbol, shares, and average price.");
+      return;
+    }
 
-  setIsLoading(true);
-  try {
-    // Get current price for the new stock
-    let currentPrice = null;
-    let targetPrice = null;
-    
+    setIsLoading(true);
     try {
-      const priceData = await fetchStockPrice(newSymbol.toUpperCase());
-      currentPrice = priceData.currentPrice;
-      targetPrice = priceData.targetPrice;
-    } catch (priceError) {
-      console.error("Failed to fetch stock price:", priceError);
-      // Continue with null prices, we'll still add the stock
+      // First, get the current user using getSession
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("Auth error:", sessionError);
+        throw sessionError;
+      }
+
+      if (!session || !session.user) {
+        throw new Error("User not authenticated");
+      }
+
+      // Get current price for the new stock
+      let currentPrice = null;
+      let targetPrice = null;
+
+      try {
+        const priceData = await fetchStockPrice(newSymbol.toUpperCase());
+        currentPrice = priceData.currentPrice;
+        targetPrice = priceData.targetPrice;
+      } catch (priceError) {
+        console.error("Failed to fetch stock price:", priceError);
+        // Continue with null prices, we'll still add the stock
+      }
+
+      // Note the use of underscores for the database fields
+      const newItem = {
+        symbol: newSymbol.toUpperCase(),
+        shares: parseFloat(newShares),
+        avg_price: parseFloat(newAvgPrice),
+        current_price: currentPrice,
+        target_price: targetPrice,
+        notes: newNotes,
+        user_id: session.user.id
+      };
+
+      console.log("Adding stock to Supabase:", newItem);
+
+      const { data, error } = await supabase
+        .from("portfolio")
+        .insert([newItem]);
+
+      if (error) {
+        console.error("Supabase insert error:", error);
+        throw error;
+      }
+
+      console.log("Stock added successfully");
+
+      // Clear form
+      setNewSymbol("");
+      setNewShares("");
+      setNewAvgPrice("");
+      setNewNotes("");
+      setIsAdding(false);
+
+      // Refresh portfolio
+      fetchPortfolio();
+
+      // Confirm to user
+      Alert.alert("Success", `${newItem.symbol} added to your portfolio.`);
+    } catch (error) {
+      console.error("Add stock error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to add stock";
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-    
-    const newItem = {
-      symbol: newSymbol.toUpperCase(),
-      shares: parseFloat(newShares),
-      avgPrice: parseFloat(newAvgPrice),
-      currentPrice: currentPrice,
-      targetPrice: targetPrice,
-      notes: newNotes
-    };
-
-    console.log("Adding stock to Supabase:", newItem);
-
-    const { data, error } = await supabase
-      .from("portfolio")
-      .insert([newItem]);
-
-    if (error) {
-      console.error("Supabase insert error:", error);
-      throw error;
-    }
-
-    console.log("Stock added successfully:", data);
-    
-    // Clear form
-    setNewSymbol("");
-    setNewShares("");
-    setNewAvgPrice("");
-    setNewNotes("");
-    setIsAdding(false);
-    
-    // Refresh portfolio
-    fetchPortfolio();
-    
-    // Confirm to user
-    Alert.alert("Success", `${newItem.symbol} added to your portfolio.`);
-  } catch (error) {
-    console.error("Add stock error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to add stock";
-    Alert.alert("Error", errorMessage);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Delete a stock from the portfolio
   const deleteStock = async (id: string) => {
     try {
+      // First, get the current user session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("Session error:", sessionError);
+        throw sessionError;
+      }
+
+      if (!session || !session.user) {
+        console.error("No active session found");
+        throw new Error("User not authenticated");
+      }
+
+      // Delete the stock entry, ensuring it belongs to the current user
       const { error } = await supabase
         .from("portfolio")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", session.user.id); // Add this line to ensure users can only delete their own stocks
 
-      if (error) throw error;
+      if (error) {
+        console.error("Delete error:", error);
+        throw error;
+      }
+
+      console.log("Stock deleted successfully");
 
       // Refresh portfolio
       fetchPortfolio();
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete stock";
+      console.error("Delete stock error:", errorMessage);
+      Alert.alert("Error", errorMessage);
     }
   };
 
