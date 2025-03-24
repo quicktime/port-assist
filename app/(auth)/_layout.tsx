@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Stack } from 'expo-router';
 import { useAuth } from '../../src/hooks/useAuth';

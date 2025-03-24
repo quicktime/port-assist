@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ThemeProvider } from '../src/provider/ThemeProvider';
 import { AuthProvider } from '../src/provider/AuthProvider';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Slot, Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '../src/hooks/useAuth';
+import { useEffect } from 'react';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -24,7 +25,7 @@ export default function RootLayout() {
 
 // Navigation structure based on authentication
 function RootLayoutNav() {
-  const { user, isLoading } = useAuth();
+  const { isLoading } = useAuth();
   
   useEffect(() => {
     // Hide splash screen when auth state is determined
@@ -33,6 +34,6 @@ function RootLayoutNav() {
     }
   }, [isLoading]);
 
-  // Show Slot (child route) - the auth handling will happen in _layout.tsx files
+  // Show Slot (child route)
   return <Slot />;
 }

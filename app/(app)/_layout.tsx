@@ -14,7 +14,7 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/login" />;
   }
   
-  // If still loading auth state, you could show a loading screen
+  // If still loading auth state, return null
   if (isLoading) {
     return null;
   }
