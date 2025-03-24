@@ -1,6 +1,6 @@
+// src/screens/Portfolio/AddEditStockScreen.tsx
 import React, { useState, useEffect } from "react";
 import { View, ScrollView, Alert, KeyboardAvoidingView, StyleSheet, Platform } from "react-native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Appbar,
   Text,
@@ -14,16 +14,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { addPortfolioItem, updatePortfolioItem, PortfolioItem } from "../services/portfolioService";
 import { fetchStockPrice } from "../services/polygonService";
-import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
+import { router } from "expo-router";
 
-type Props = NativeStackScreenProps<MainStackParamList, "AddStock" | "EditStock">;
+type AddEditStockProps = {
+  mode: 'add' | 'edit';
+  item?: PortfolioItem;
+};
 
-export default function AddEditStockScreen({ route, navigation }: Props) {
+export default function AddEditStockScreen({ mode, item }: AddEditStockProps) {
   const { isDarkMode, toggleTheme } = useAppTheme();
   const paperTheme = useTheme();
-  const isEditMode = route.name === "EditStock";
-  const editItem = isEditMode ? (route.params as { item: PortfolioItem }).item : undefined;
+  const isEditMode = mode === 'edit';
+  const editItem = isEditMode ? item : undefined;
   
   const [symbol, setSymbol] = useState(editItem?.symbol || "");
   const [shares, setShares] = useState(editItem?.shares.toString() || "");
@@ -116,12 +119,12 @@ export default function AddEditStockScreen({ route, navigation }: Props) {
       if (isEditMode && editItem?.id) {
         await updatePortfolioItem(portfolioItem);
         Alert.alert("Success", "Stock updated successfully", [
-          { text: "OK", onPress: () => navigation.goBack() }
+          { text: "OK", onPress: () => router.back() }
         ]);
       } else {
         await addPortfolioItem(portfolioItem);
         Alert.alert("Success", "Stock added to portfolio", [
-          { text: "OK", onPress: () => navigation.goBack() }
+          { text: "OK", onPress: () => router.back() }
         ]);
       }
     } catch (error) {
@@ -135,7 +138,7 @@ export default function AddEditStockScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content title={isEditMode ? "Edit Stock" : "Add Stock"} />
         <Appbar.Action 
           icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "template-typescript-bottom-tabs-supabase-auth-flow",
-    "slug": "template-typescript-bottom-tabs-supabase-auth-flow",
+    "name": "Investment Portfolio Tracker",
+    "slug": "investment-portfolio-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,19 +17,28 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.portfoliotracker"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "package": "com.yourcompany.portfoliotracker"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-router"
+    ],
+    "scheme": "investment-portfolio-tracker",
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+    "entryPoint": "./index/js"
   }
 }

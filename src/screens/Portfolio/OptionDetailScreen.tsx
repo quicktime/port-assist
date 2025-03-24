@@ -1,6 +1,6 @@
+// src/screens/Portfolio/OptionDetailScreen.tsx
 import React from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Appbar,
   Text,
@@ -12,15 +12,16 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { OptionData } from "../services/polygonService";
-import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
+import { router } from "expo-router";
 
-type Props = NativeStackScreenProps<MainStackParamList, "OptionDetail">;
+type OptionDetailScreenProps = {
+  option: OptionData;
+};
 
-export default function OptionDetailScreen({ route, navigation }: Props) {
+export default function OptionDetailScreen({ option }: OptionDetailScreenProps) {
   const { isDarkMode, toggleTheme } = useAppTheme();
   const paperTheme = useTheme();
-  const { option } = route.params as { option: OptionData };
 
   const formatGreekValue = (value: number) => {
     if (Math.abs(value) < 0.001) {
@@ -32,7 +33,7 @@ export default function OptionDetailScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content 
           title={
             `${option.underlyingSymbol} ${option.optionType === 'call' ? 'Call' : 'Put'} $${option.strikePrice}`

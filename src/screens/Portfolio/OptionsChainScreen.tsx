@@ -1,6 +1,6 @@
+// src/screens/Portfolio/OptionsChainScreen.tsx
 import React, { useState, useEffect } from "react";
 import { View, ScrollView, FlatList, TouchableOpacity, Alert, StyleSheet } from "react-native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Appbar,
   Text,
@@ -17,15 +17,16 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { fetchOptionsData, fetchOptionsExpirations, fetchStockPrice, OptionData } from "../services/polygonService";
-import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
+import { router } from "expo-router";
 
-type Props = NativeStackScreenProps<MainStackParamList, "OptionsChain">;
+type OptionsChainScreenProps = {
+  symbol: string;
+};
 
-export default function OptionsChainScreen({ route, navigation }: Props) {
+export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) {
   const { isDarkMode, toggleTheme } = useAppTheme();
   const paperTheme = useTheme();
-  const { symbol } = route.params as { symbol: string };
   
   const [stockPrice, setStockPrice] = useState<number | null>(null);
   const [optionType, setOptionType] = useState<'call' | 'put'>('call');
@@ -95,7 +96,14 @@ export default function OptionsChainScreen({ route, navigation }: Props) {
     
     return (
       <TouchableOpacity
-        onPress={() => navigation.navigate("OptionDetail", { option: item })}
+        onPress={() => {
+          // Navigate to option detail screen with option data
+          // Convert option data to string for URL params
+          router.push({
+            pathname: '/(app)/option-detail',
+            params: { option: JSON.stringify(item) }
+          });
+        }}
       >
         <DataTable.Row 
           style={[
@@ -120,7 +128,7 @@ export default function OptionsChainScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Appbar.Header>
-          <Appbar.BackAction onPress={() => navigation.goBack()} />
+          <Appbar.BackAction onPress={() => router.back()} />
           <Appbar.Content title={`${symbol} Options`} />
         </Appbar.Header>
         <View style={styles.loadingContainer}>
@@ -134,7 +142,7 @@ export default function OptionsChainScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content title={`${symbol} Options`} />
         <Appbar.Action 
           icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 

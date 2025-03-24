@@ -1,10 +1,12 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { supabase } from '../initSupabase';
 import { Session } from '@supabase/supabase-js';
+import { router } from 'expo-router';
 
 type ContextProps = {
   user: null | boolean;
   session: Session | null;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<Partial<ContextProps>>({});
@@ -31,6 +33,13 @@ const AuthProvider = (props: Props) => {
         console.log(`Supabase auth event: ${_event}`);
         setSession(session);
         setUser(session ? true : false);
+        
+        // Navigate based on auth state
+        if (session) {
+          router.replace('/(app)');
+        } else if (_event === 'SIGNED_OUT') {
+          router.replace('/(auth)/login');
+        }
       }
     );
 
@@ -40,11 +49,20 @@ const AuthProvider = (props: Props) => {
     };
   }, []);
 
+  // Sign out function
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out:', error.message);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
+        signOut,
       }}
     >
       {props.children}

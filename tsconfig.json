@@ -15,33 +15,24 @@
     "target": "ESNext",
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@components/*": [
-        "./src/components/*"
-      ],
-      "@screens/*": [
-        "./src/screens/*"
-      ],
-      "@navigation/*": [
-        "./src/navigation/*"
-      ],
-      "@services/*": [
-        "./src/services/*"
-      ],
-      "@types/*": [
-        "./src/types/*"
-      ],
-      "@assets/*": [
-        "./assets/*"
-      ]
-    }
+      "@/*": ["./src/*"],
+      "@components/*": ["./src/components/*"],
+      "@screens/*": ["./src/screens/*"],
+      "@navigation/*": ["./src/navigation/*"],
+      "@services/*": ["./src/services/*"],
+      "@types/*": ["./src/types/*"],
+      "@assets/*": ["./assets/*"],
+      "~/*": ["./*"]
+    },
+    "types": ["react-native", "expo-router/types"]
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ],
   "exclude": [
     "node_modules",
