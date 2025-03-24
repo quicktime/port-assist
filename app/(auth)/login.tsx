@@ -131,7 +131,7 @@ export default function Login() {
               <Text variant="bodyMedium">Don't have an account?</Text>
               <TouchableOpacity
                 onPress={() => {
-                  router.push('/(auth)/register');
+                  router.push('/register');
                 }}
               >
                 <Text
@@ -146,7 +146,7 @@ export default function Login() {
             <View style={styles.linkContainer}>
               <TouchableOpacity
                 onPress={() => {
-                  router.push('/(auth)/forget-password');
+                  router.push('/forget-password');
                 }}
               >
                 <Text

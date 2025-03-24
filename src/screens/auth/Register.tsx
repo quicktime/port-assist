@@ -1,3 +1,4 @@
+// src/screens/auth/Register.tsx
 import React, { useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -9,8 +10,6 @@ import {
   StyleSheet,
 } from "react-native";
 import { supabase } from "../../initSupabase";
-import { AuthStackParamList } from "../../types/navigation";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Text,
   TextInput,
@@ -20,10 +19,9 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../provider/ThemeProvider";
+import { router } from "expo-router"; // Import router
 
-export default function Register({
-  navigation,
-}: NativeStackScreenProps<AuthStackParamList, "Register">) {
+export default function Register() { // Remove navigation props
   const { isDarkMode, toggleTheme } = useAppTheme();
   const theme = useTheme();
   const [email, setEmail] = useState<string>("");
@@ -117,7 +115,7 @@ export default function Register({
               <Text variant="bodyMedium">Already have an account?</Text>
               <TouchableOpacity
                 onPress={() => {
-                  navigation.navigate("Login");
+                  router.push("/login"); // Use router instead of navigation
                 }}
               >
                 <Text
