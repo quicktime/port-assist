@@ -15,7 +15,7 @@ A cross-platform investment portfolio tracking application built with React Nati
 
 - **Frontend**: React Native with Expo
 - **UI Components**: React Native Rapi UI
-- **Navigation**: React Navigation v6
+- **Navigation**: Expo Router
 - **Backend**: Supabase (PostgreSQL + OrioleDB)
 - **Authentication**: Supabase Auth
 - **Market Data**: Polygon.io API
