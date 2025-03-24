@@ -1,4 +1,3 @@
-// app/(app)/option-detail.tsx
 import React from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import OptionDetailScreen from "../../src/screens/Portfolio/OptionDetailScreen";

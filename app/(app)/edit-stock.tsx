@@ -1,4 +1,3 @@
-// app/(app)/edit-stock.tsx
 import React from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import AddEditStockScreen from "../../src/screens/Portfolio/AddEditStockScreen";

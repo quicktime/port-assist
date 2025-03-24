@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from "react-native";
-import { CompositeScreenProps } from "@react-navigation/native";
-import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { supabase } from "../initSupabase";
 import {
   Appbar,
@@ -13,17 +10,11 @@ import {
   useTheme,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MainTabsParamList, MainStackParamList } from "../types/navigation";
 import { useAppTheme } from "../provider/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router"; // Import router instead of navigation
 
-// Composite prop type that combines tab navigation with potential stack navigation
-type ProfileScreenProps = CompositeScreenProps<
-  BottomTabScreenProps<MainTabsParamList, "Profile">,
-  NativeStackScreenProps<MainStackParamList>
->;
-
-const Profile = ({ navigation }: ProfileScreenProps) => {
+const Profile = () => {
   const paperTheme = useTheme();
   const { isDarkMode, toggleTheme } = useAppTheme();
   const [contributionAmount, setContributionAmount] = useState("777");

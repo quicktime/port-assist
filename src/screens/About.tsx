@@ -1,8 +1,5 @@
 import React from "react";
 import { View, ScrollView, StyleSheet, Linking } from "react-native";
-import { CompositeScreenProps } from "@react-navigation/native";
-import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Appbar,
   Text,
@@ -14,17 +11,11 @@ import {
   List
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MainTabsParamList, MainStackParamList } from "../types/navigation";
 import { useAppTheme } from "../provider/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router"; // Import router instead of navigation
 
-// Composite prop type that combines tab navigation with potential stack navigation
-type AboutScreenProps = CompositeScreenProps<
-  BottomTabScreenProps<MainTabsParamList, "About">,
-  NativeStackScreenProps<MainStackParamList>
->;
-
-const About = ({ navigation }: AboutScreenProps) => {
+const About = () => {
   const paperTheme = useTheme();
   const { isDarkMode, toggleTheme } = useAppTheme();
 

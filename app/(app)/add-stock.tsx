@@ -1,4 +1,3 @@
-
 import React from "react";
 import AddEditStockScreen from "../../src/screens/Portfolio/AddEditStockScreen";
 
