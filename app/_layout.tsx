@@ -1,39 +1,39 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ThemeProvider } from '../src/provider/ThemeProvider';
 import { AuthProvider } from '../src/provider/AuthProvider';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '../src/hooks/useAuth';
-import { useEffect } from 'react';
 
 // Prevent the splash screen from auto-hiding
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* ignore errors */
+});
 
-// Root layout for the app
+// Root layout
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <RootLayoutNav />
+          <RootLayoutWithAuth />
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-// Navigation structure based on authentication
-function RootLayoutNav() {
+function RootLayoutWithAuth() {
   const { isLoading } = useAuth();
   
   useEffect(() => {
-    // Hide splash screen when auth state is determined
     if (!isLoading) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {
+        /* ignore errors */
+      });
     }
   }, [isLoading]);
 
-  // Show Slot (child route)
   return <Slot />;
 }

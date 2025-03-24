@@ -39,6 +39,6 @@
       "typedRoutes": true,
       "tsconfigPaths": true
     },
-    "entryPoint": "index.js"
+    "entryPoint": "./index.js"
   }
 }
