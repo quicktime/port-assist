@@ -330,8 +330,11 @@ export const fetchOptionsData = async (
     // Use the Polygon.io client library to fetch options contracts
     const response = await polygonRest.reference.optionsContracts({
       underlying_ticker: underlyingSymbol,
-      expiration_date: expDate
+      expiration_date: expDate,
+      limit: 100
     });
+
+    console.log(`Fetched ${(response.results ?? []).length} options for ${underlyingSymbol} expiring on ${expDate}`);
 
     if (response.results && response.results.length > 0) {
       // Map API response to our OptionData interface

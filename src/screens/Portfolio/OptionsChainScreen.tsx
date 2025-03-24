@@ -43,40 +43,58 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
   const [filterText, setFilterText] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
 
-  // Refs for tracking subscriptions
+  // Refs for tracking subscriptions and updates
   const stockSubscriptionRef = useRef<string | null>(null);
   const optionSubscriptionsRef = useRef<Map<string, string>>(new Map());
+  const updateQueueRef = useRef<{[key: string]: Partial<OptionData>}>({});
   const lastUpdateTimeRef = useRef<number>(0);
-  const pendingUpdatesRef = useRef<any[]>([]);
 
-  // Throttled update function
-  const throttledUpdate = useCallback(() => {
-    const now = Date.now();
-    if (now - lastUpdateTimeRef.current >= 20000) { // 20 seconds
-      // Apply all pending updates
-      if (pendingUpdatesRef.current.length > 0) {
-        setOptions(prevOptions =>
-          prevOptions.map(opt => {
-            const updates = pendingUpdatesRef.current
-              .filter(update => update.ticker === opt.symbol)
-              .reduce((acc, update) => ({
-                ...acc,
-                lastPrice: update.lastPrice || acc.lastPrice,
-                bidPrice: update.bidPrice || acc.bidPrice,
-                askPrice: update.askPrice || acc.askPrice,
-                openInterest: update.openInterest || acc.openInterest
-              }), opt);
+  // Batch update function with 30-second throttling
+  const processPendingUpdates = useCallback(() => {
+    const currentTime = Date.now();
+    const updates = updateQueueRef.current;
 
-            return updates;
-          })
-        );
+    // Only update if 30 seconds have passed since the last update
+    if (currentTime - lastUpdateTimeRef.current >= 30000 && Object.keys(updates).length > 0) {
+      setOptions(prevOptions => 
+        prevOptions.map(opt => {
+          const update = updates[opt.symbol];
+          if (update) {
+            return {
+              ...opt,
+              ...(update.lastPrice !== undefined && { lastPrice: update.lastPrice }),
+              ...(update.bidPrice !== undefined && { bidPrice: update.bidPrice }),
+              ...(update.askPrice !== undefined && { askPrice: update.askPrice }),
+              ...(update.openInterest !== undefined && { openInterest: update.openInterest })
+            };
+          }
+          return opt;
+        })
+      );
 
-        // Reset pending updates and update timestamp
-        pendingUpdatesRef.current = [];
-        lastUpdateTimeRef.current = now;
-      }
+      // Update the last update time
+      lastUpdateTimeRef.current = currentTime;
+
+      // Clear the update queue
+      updateQueueRef.current = {};
     }
   }, []);
+
+  // Queue update with 30-second throttling
+  const queueUpdate = useCallback((ticker: string, updateData: Partial<OptionData>) => {
+    const currentTime = Date.now();
+
+    // Always add to queue for potential future update
+    updateQueueRef.current[ticker] = {
+      ...updateQueueRef.current[ticker],
+      ...updateData
+    };
+
+    // If 30 seconds have passed, process updates immediately
+    if (currentTime - lastUpdateTimeRef.current >= 30000) {
+      processPendingUpdates();
+    }
+  }, [processPendingUpdates]);
 
   // Load initial data and set up subscriptions
   const loadInitialData = useCallback(async () => {
@@ -140,34 +158,6 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
 
   // Set up WebSocket event listeners
   useEffect(() => {
-    // Handler for stock price updates
-    const handleStockUpdate = (data: StockData) => {
-      if (data.ticker === symbol) {
-        setStockPrice(data.currentPrice);
-      }
-    };
-
-    // Handler for option updates
-    const handleOptionUpdate = (data: any) => {
-      // Check if the update is for an option in our current set
-      const matchingOption = options.find(opt => opt.symbol === data.ticker);
-      if (matchingOption) {
-        setOptions(prevOptions =>
-          prevOptions.map(opt =>
-            opt.symbol === data.ticker
-              ? {
-                ...opt,
-                lastPrice: data.lastPrice || opt.lastPrice,
-                bidPrice: data.bidPrice || opt.bidPrice,
-                askPrice: data.askPrice || opt.askPrice,
-                openInterest: data.openInterest || opt.openInterest
-              }
-              : opt
-          )
-        );
-      }
-    };
-
     // Initial data load
     loadInitialData();
 
@@ -185,7 +175,7 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
       });
       optionSubscriptionsRef.current.clear();
     };
-  }, [symbol, loadInitialData, unsubscribe, options]);
+  }, [symbol, loadInitialData, unsubscribe]);
 
   // Handle expiration date change
   const handleExpirationChange = async (expDate: string) => {
@@ -229,8 +219,13 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
         >
           <DataTable.Cell>{item.strikePrice.toFixed(2)}</DataTable.Cell>
           <DataTable.Cell numeric>{item.lastPrice.toFixed(2)}</DataTable.Cell>
+          <DataTable.Cell numeric>{item.greeks.delta}</DataTable.Cell>
+          <DataTable.Cell numeric>{item.greeks.gamma}</DataTable.Cell>
+          <DataTable.Cell numeric>{item.greeks.theta}</DataTable.Cell>
+          <DataTable.Cell numeric>{item.greeks.vega}</DataTable.Cell>
           <DataTable.Cell numeric>{item.openInterest}</DataTable.Cell>
           <DataTable.Cell numeric>{(item.impliedVolatility * 100).toFixed(1)}%</DataTable.Cell>
+
         </DataTable.Row>
       </TouchableOpacity>
     );
@@ -326,13 +321,33 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
               style={styles.searchBar}
             />
 
-            <DataTable>
-              <DataTable.Header>
-                <DataTable.Title>Strike</DataTable.Title>
-                <DataTable.Title numeric>Last</DataTable.Title>
-                <DataTable.Title numeric>OI</DataTable.Title>
-                <DataTable.Title numeric>IV%</DataTable.Title>
-              </DataTable.Header>
+            <View style={styles.tableContainer}>
+              <View style={styles.tableHeader}>
+                <View style={[styles.headerCell, styles.strikeCell]}>
+                  <Text style={styles.headerText}>Strike</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Premium</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Delta</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Gamma</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Theta</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Vega</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>OI</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>IV%</Text>
+                </View>
+              </View>
 
               {loadingOptions ? (
                 <View style={styles.loadingOptionsContainer}>
@@ -340,18 +355,51 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
                   <Text style={styles.loadingOptionsText}>Loading options...</Text>
                 </View>
               ) : filteredOptions.length > 0 ? (
-                <FlatList
-                  data={filteredOptions}
-                  renderItem={renderOptionItem}
-                  keyExtractor={(item) => item.symbol}
-                  scrollEnabled={false}
-                />
+                <ScrollView 
+                  horizontal 
+                  contentContainerStyle={styles.scrollViewContent}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  <FlatList
+                    data={filteredOptions}
+                    renderItem={({ item }) => (
+                      <View style={styles.rowContainer}>
+                        <View style={[styles.rowCell, styles.strikeCell]}>
+                          <Text>{item.strikePrice.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{item.lastPrice.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{formatGreekValue(item.greeks.delta)}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{formatGreekValue(item.greeks.gamma)}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{formatGreekValue(item.greeks.theta)}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{formatGreekValue(item.greeks.vega)}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{item.openInterest}</Text>
+                        </View>
+                        <View style={[styles.rowCell, styles.numericCell]}>
+                          <Text>{(item.impliedVolatility * 100).toFixed(1)}%</Text>
+                        </View>
+                      </View>
+                    )}
+                    keyExtractor={(item) => item.symbol}
+                    scrollEnabled={false}
+                  />
+                </ScrollView>
               ) : (
                 <View style={styles.noOptionsContainer}>
                   <Text>No options available for this selection</Text>
                 </View>
               )}
-            </DataTable>
+            </View>
           </Card.Content>
         </Card>
       </ScrollView>
@@ -359,13 +407,59 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
   );
 }
 
+// Helper function to format Greek values
+const formatGreekValue = (value: number) => {
+  return value.toFixed(4);
+};
+
 const styles = StyleSheet.create({
-  // ... (styles remain the same as in the previous implementation)
   container: {
     flex: 1,
   },
   scrollView: {
     flex: 1,
+  },
+  tableContainer: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.12)',
+  },
+  headerCell: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerText: {
+    fontWeight: 'bold',
+  },
+  strikeCell: {
+    flex: 1.2,
+  },
+  numericCell: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.12)',
+    paddingVertical: 10,
+  },
+  rowCell: {
+    flex: 1,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+  },
+  scrollViewContent: {
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,

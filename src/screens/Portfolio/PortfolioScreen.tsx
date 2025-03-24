@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { router } from "expo-router";
 import { View, FlatList, RefreshControl, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -15,13 +16,16 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { 
-  portfolioManager, 
   PortfolioItem,
-  deletePortfolioItem 
+  getPortfolio,
+  getPortfolioSummary,
+  deletePortfolioItem,
+  getPortfolioWithCurrentPrices
 } from "../services/portfolioService";
 import { fetchMarketStatus } from '../services/polygonService';
 import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
+// WebSocket service import removed
 
 export default function PortfolioScreen() {
   const { isDarkMode, toggleTheme } = useAppTheme();
@@ -37,46 +41,43 @@ export default function PortfolioScreen() {
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
 
-  useEffect(() => {
-    // Initialize portfolio manager
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        await portfolioManager.initialize();
-        setLoading(false);
-      } catch (error) {
-        console.error("Error initializing portfolio:", error);
-        setLoading(false);
-        Alert.alert("Error", "Failed to load portfolio data");
-      }
-    };
-
-    initialize();
-
-    // Subscribe to portfolio updates
-    const unsubscribe = portfolioManager.subscribe((items) => {
-      setPortfolio(items);
-      
-      const summaryData = portfolioManager.getPortfolioSummary();
+  const loadPortfolioData = async () => {
+    try {
+      setLoading(true);
+      const summaryData = await getPortfolioSummary();
       setSummary({
         totalValue: summaryData.totalValue,
         totalCost: summaryData.totalCost,
         totalProfit: summaryData.totalProfit,
         totalProfitPercent: summaryData.totalProfitPercent
       });
-    });
-    
+      setPortfolio(summaryData.items);
+    } catch (error) {
+      console.error("Error loading portfolio:", error);
+      Alert.alert("Error", "Failed to load portfolio data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPortfolioData();
+
     // Automatically refresh data every 5 minutes when market is open
-    // This ensures our WebSocket data stays in sync even if we miss updates
     let refreshInterval: NodeJS.Timeout | null = null;
     
     const setupRefreshInterval = async () => {
       try {
         const marketStatus = await fetchMarketStatus();
         
-        if (marketStatus.isOpen) {
-          refreshInterval = setInterval(() => {
-            portfolioManager.refreshData();
+        if (marketStatus === "open") {
+          refreshInterval = setInterval(async () => {
+            try {
+              const updatedPortfolio = await getPortfolioWithCurrentPrices();
+              setPortfolio(updatedPortfolio);
+            } catch (error) {
+              console.error("Error refreshing portfolio:", error);
+            }
           }, 5 * 60 * 1000); // 5 minutes
         }
       } catch (error) {
@@ -88,7 +89,6 @@ export default function PortfolioScreen() {
 
     // Cleanup on unmount
     return () => {
-      unsubscribe();
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
@@ -98,7 +98,7 @@ export default function PortfolioScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await portfolioManager.initialize();
+      await loadPortfolioData();
     } catch (error) {
       console.error("Error refreshing portfolio:", error);
       Alert.alert("Error", "Failed to refresh portfolio data");
@@ -128,7 +128,8 @@ export default function PortfolioScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await portfolioManager.deleteItem(id);
+              await deletePortfolioItem(id);
+              await loadPortfolioData();
             } catch (error) {
               console.error("Error deleting stock:", error);
               Alert.alert("Error", "Failed to delete stock");
@@ -140,7 +141,7 @@ export default function PortfolioScreen() {
   };
 
   const handleViewOptions = (symbol: string) => {
-    navigation.navigate("OptionsChain", { symbol });
+    router.push(`/options-chain/${symbol}`);
   };
 
   const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => {
