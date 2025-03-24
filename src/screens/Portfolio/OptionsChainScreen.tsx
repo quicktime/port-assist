@@ -1,5 +1,5 @@
 // src/screens/Portfolio/OptionsChainScreen.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, FlatList, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import {
   Appbar,
@@ -16,7 +16,14 @@ import {
   Searchbar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { fetchOptionsData, fetchOptionsExpirations, fetchStockPrice, OptionData } from "../services/polygonService";
+import { 
+  fetchOptionsData, 
+  fetchOptionsExpirations, 
+  fetchStockPrice, 
+  subscribeToStockPrice,
+  subscribeToOptionData,
+  OptionData
+} from "../services/polygonService";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
 
@@ -37,11 +44,23 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
+  
+  // Refs for subscriptions that need to be cleaned up
+  const stockPriceUnsubscribeRef = useRef<(() => void) | null>(null);
+  const optionUnsubscribesRef = useRef<Map<string, () => void>>(new Map());
 
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        // Fetch current stock price
+        // Set up real-time stock price subscription
+        const unsubscribe = await subscribeToStockPrice(symbol, (stockData) => {
+          setStockPrice(stockData.currentPrice);
+        });
+        
+        // Store unsubscribe function for cleanup
+        stockPriceUnsubscribeRef.current = unsubscribe;
+        
+        // Fetch initial stock price
         const stockData = await fetchStockPrice(symbol);
         setStockPrice(stockData.currentPrice);
         
@@ -62,13 +81,45 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
     };
 
     loadInitialData();
+    
+    // Cleanup subscriptions on unmount
+    return () => {
+      if (stockPriceUnsubscribeRef.current) {
+        stockPriceUnsubscribeRef.current();
+        stockPriceUnsubscribeRef.current = null;
+      }
+      
+      // Clean up all option subscriptions
+      optionUnsubscribesRef.current.forEach(unsubscribe => unsubscribe());
+      optionUnsubscribesRef.current.clear();
+    };
   }, [symbol]);
 
   const loadOptionsData = async (expDate: string) => {
     setLoadingOptions(true);
+    
+    // Clear existing option subscriptions
+    optionUnsubscribesRef.current.forEach(unsubscribe => unsubscribe());
+    optionUnsubscribesRef.current.clear();
+    
     try {
       const optionsData = await fetchOptionsData(symbol, expDate);
       setOptions(optionsData);
+      
+      // Set up real-time subscriptions for each option
+      for (const option of optionsData) {
+        const unsubscribe = await subscribeToOptionData(option.symbol, (update) => {
+          setOptions(prevOptions => 
+            prevOptions.map(opt => 
+              opt.symbol === option.symbol 
+                ? { ...opt, ...update } 
+                : opt
+            )
+          );
+        });
+        
+        optionUnsubscribesRef.current.set(option.symbol, unsubscribe);
+      }
     } catch (error) {
       console.error("Error loading options chain:", error);
       Alert.alert("Error", "Failed to load options chain");
@@ -98,7 +149,6 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
       <TouchableOpacity
         onPress={() => {
           // Navigate to option detail screen with option data
-          // Convert option data to string for URL params
           router.push({
             pathname: '/(app)/option-detail',
             params: { option: JSON.stringify(item) }

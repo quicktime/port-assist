@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { View, FlatList, RefreshControl, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useFocusEffect } from "@react-navigation/native";
-import { router } from "expo-router";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   Appbar,
   Text,
@@ -12,12 +11,16 @@ import {
   useTheme,
   IconButton,
   Divider,
-  ActivityIndicator,
-  Badge
+  ActivityIndicator
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getPortfolioWithCurrentPrices, getPortfolioSummary, PortfolioItem, deletePortfolioItem } from "../services/portfolioService";
-import { fetchMarketStatus } from "../services/polygonService";
+import { 
+  portfolioManager, 
+  PortfolioItem,
+  deletePortfolioItem 
+} from "../services/portfolioService";
+import { fetchMarketStatus } from '../services/polygonService';
+import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
 
 export default function PortfolioScreen() {
@@ -32,57 +35,84 @@ export default function PortfolioScreen() {
   });
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [marketStatus, setMarketStatus] = useState<string>("unknown");
-  
-  const loadPortfolio = async () => {
-    try {
-      setLoading(true);
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+
+  useEffect(() => {
+    // Initialize portfolio manager
+    const initialize = async () => {
+      try {
+        setLoading(true);
+        await portfolioManager.initialize();
+        setLoading(false);
+      } catch (error) {
+        console.error("Error initializing portfolio:", error);
+        setLoading(false);
+        Alert.alert("Error", "Failed to load portfolio data");
+      }
+    };
+
+    initialize();
+
+    // Subscribe to portfolio updates
+    const unsubscribe = portfolioManager.subscribe((items) => {
+      setPortfolio(items);
       
-      // Get market status
-      const status = await fetchMarketStatus();
-      setMarketStatus(status.market);
-      
-      // Get portfolio data
-      const portfolioData = await getPortfolioWithCurrentPrices();
-      setPortfolio(portfolioData);
-      
-      // Get summary
-      const summaryData = await getPortfolioSummary();
+      const summaryData = portfolioManager.getPortfolioSummary();
       setSummary({
         totalValue: summaryData.totalValue,
         totalCost: summaryData.totalCost,
         totalProfit: summaryData.totalProfit,
         totalProfitPercent: summaryData.totalProfitPercent
       });
-    } catch (error) {
-      console.error("Error loading portfolio:", error);
-      Alert.alert("Error", "Failed to load portfolio data");
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
+    
+    // Automatically refresh data every 5 minutes when market is open
+    // This ensures our WebSocket data stays in sync even if we miss updates
+    let refreshInterval: NodeJS.Timeout | null = null;
+    
+    const setupRefreshInterval = async () => {
+      try {
+        const marketStatus = await fetchMarketStatus();
+        
+        if (marketStatus.isOpen) {
+          refreshInterval = setInterval(() => {
+            portfolioManager.refreshData();
+          }, 5 * 60 * 1000); // 5 minutes
+        }
+      } catch (error) {
+        console.error("Error checking market status:", error);
+      }
+    };
+    
+    setupRefreshInterval();
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribe();
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadPortfolio();
-    setRefreshing(false);
+    try {
+      await portfolioManager.initialize();
+    } catch (error) {
+      console.error("Error refreshing portfolio:", error);
+      Alert.alert("Error", "Failed to refresh portfolio data");
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadPortfolio();
-    }, [])
-  );
-
   const handleAddStock = () => {
-    router.push('/add-stock');
+    navigation.navigate("AddStock");
   };
 
   const handleEditStock = (item: PortfolioItem) => {
-    router.push({
-      pathname: '/edit-stock',
-      params: { item: JSON.stringify(item) }
-    });
+    navigation.navigate("EditStock", { item });
   };
 
   const handleDeleteStock = async (id?: string) => {
@@ -98,8 +128,7 @@ export default function PortfolioScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deletePortfolioItem(id);
-              loadPortfolio();
+              await portfolioManager.deleteItem(id);
             } catch (error) {
               console.error("Error deleting stock:", error);
               Alert.alert("Error", "Failed to delete stock");
@@ -111,11 +140,7 @@ export default function PortfolioScreen() {
   };
 
   const handleViewOptions = (symbol: string) => {
-    router.push(`/options-chain/${symbol}`);
-  };
-
-  const handleViewCompanyDetails = (symbol: string) => {
-    router.push(`/company-details/${symbol}` as any);
+    navigation.navigate("OptionsChain", { symbol });
   };
 
   const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => {
@@ -130,24 +155,12 @@ export default function PortfolioScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <View style={styles.cardHeader}>
-              <View style={styles.symbolContainer}>
-                <Text variant="titleLarge">{item.symbol}</Text>
-                <Text variant="bodySmall" style={styles.allocation}>
-                  {item.allocation?.toFixed(1)}% of portfolio
-                </Text>
-              </View>
-              <View style={styles.actionButtons}>
-                <IconButton
-                  icon="chart-line-variant"
-                  size={20}
-                  onPress={() => handleViewOptions(item.symbol)}
-                />
-                <IconButton
-                  icon="information-outline"
-                  size={20}
-                  onPress={() => handleViewCompanyDetails(item.symbol)}
-                />
-              </View>
+              <Text variant="titleLarge">{item.symbol}</Text>
+              <IconButton
+                icon="chart-line-variant"
+                size={20}
+                onPress={() => handleViewOptions(item.symbol)}
+              />
             </View>
             
             <Divider style={styles.divider} />
@@ -168,16 +181,6 @@ export default function PortfolioScreen() {
                 {isProfitable ? "+" : ""}{item.profit_loss_percent?.toFixed(2)}% (${item.profit_loss?.toFixed(2)})
               </Text>
             </View>
-            
-            {item.target_price && (
-              <View style={styles.targetPriceContainer}>
-                <Text variant="bodySmall">
-                  Target: ${item.target_price.toFixed(2)} ({item.current_price 
-                    ? ((item.target_price / item.current_price - 1) * 100).toFixed(2) + '% away' 
-                    : 'N/A'})
-                </Text>
-              </View>
-            )}
           </Card.Content>
         </Card>
       </TouchableOpacity>
@@ -195,8 +198,7 @@ export default function PortfolioScreen() {
         value: 1625,
         cost_basis: 1575,
         profit_loss: 50,
-        profit_loss_percent: 3.17,
-        allocation: 38.0
+        profit_loss_percent: 3.17
       },
       {
         symbol: "ACHR",
@@ -206,8 +208,7 @@ export default function PortfolioScreen() {
         value: 1345,
         cost_basis: 1233,
         profit_loss: 112,
-        profit_loss_percent: 9.08,
-        allocation: 31.5
+        profit_loss_percent: 9.08
       },
       {
         symbol: "HOOD",
@@ -217,15 +218,14 @@ export default function PortfolioScreen() {
         value: 1740,
         cost_basis: 1771.20,
         profit_loss: -31.20,
-        profit_loss_percent: -1.76,
-        allocation: 30.5
+        profit_loss_percent: -1.76
       }
     ];
   };
 
   const displayedPortfolio = portfolio.length > 0 ? portfolio : getSampleData();
 
-  if (loading && !refreshing) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Appbar.Header>
@@ -237,7 +237,7 @@ export default function PortfolioScreen() {
         </Appbar.Header>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={paperTheme.colors.primary} />
-          <Text style={{ marginTop: 16 }}>Loading portfolio data...</Text>
+          <Text variant="bodyMedium" style={{ marginTop: 16 }}>Loading portfolio data...</Text>
         </View>
       </SafeAreaView>
     );
@@ -255,21 +255,6 @@ export default function PortfolioScreen() {
 
       <View style={styles.content}>
         <Surface style={styles.summaryCard} elevation={1}>
-          <View style={styles.marketStatusContainer}>
-            <Text variant="bodySmall">Market: </Text>
-            <Badge 
-              style={{ 
-                backgroundColor: marketStatus === 'open' 
-                  ? paperTheme.colors.primary
-                  : marketStatus === 'closed'
-                    ? paperTheme.colors.error
-                    : paperTheme.colors.secondary
-              }}
-            >
-              {marketStatus === 'open' ? 'Open' : marketStatus === 'closed' ? 'Closed' : 'Extended Hours'}
-            </Badge>
-          </View>
-          
           <View style={styles.summaryRow}>
             <Text variant="titleMedium">Total Value</Text>
             <Text variant="titleMedium">${summary.totalValue.toFixed(2)}</Text>
@@ -349,11 +334,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderRadius: 8,
   },
-  marketStatusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -381,16 +361,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
-  symbolContainer: {
-    flex: 1,
-  },
-  allocation: {
-    opacity: 0.8,
-    marginTop: 2,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-  },
   divider: {
     marginVertical: 8,
   },
@@ -398,10 +368,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 8,
-  },
-  targetPriceContainer: {
-    marginTop: 8,
-    alignItems: 'flex-end',
   },
   emptyState: {
     alignItems: "center",

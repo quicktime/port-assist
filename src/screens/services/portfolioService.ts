@@ -1,10 +1,5 @@
 import { supabase } from '../../initSupabase';
-import { 
-  fetchStockPrice, 
-  fetchOptionsData, 
-  fetchOptionsExpirations, 
-  StockData 
-} from './polygonService';
+import { fetchStockPrice, subscribeToStockPrice } from './polygonService';
 
 export interface PortfolioItem {
   id?: string;
@@ -23,7 +18,6 @@ export interface PortfolioItem {
   cost_basis?: number;
   profit_loss?: number;
   profit_loss_percent?: number;
-  allocation?: number;
 }
 
 // Fetch portfolio items for the current user
@@ -48,15 +42,6 @@ export const getPortfolio = async (): Promise<PortfolioItem[]> => {
 // Add a new item to the portfolio
 export const addPortfolioItem = async (item: PortfolioItem): Promise<PortfolioItem> => {
   try {
-    // Try to get current price from Polygon.io
-    let currentPrice = null;
-    try {
-      const stockData = await fetchStockPrice(item.symbol);
-      currentPrice = stockData.currentPrice;
-    } catch (priceError) {
-      console.warn(`Couldn't fetch current price for ${item.symbol}:`, priceError);
-    }
-    
     const { data, error } = await supabase
       .from('portfolio')
       .insert([
@@ -64,7 +49,6 @@ export const addPortfolioItem = async (item: PortfolioItem): Promise<PortfolioIt
           symbol: item.symbol,
           shares: item.shares,
           avg_price: item.avg_price,
-          current_price: currentPrice,
           target_price: item.target_price,
           notes: item.notes
         }
@@ -85,21 +69,11 @@ export const addPortfolioItem = async (item: PortfolioItem): Promise<PortfolioIt
 // Update an existing portfolio item
 export const updatePortfolioItem = async (item: PortfolioItem): Promise<PortfolioItem> => {
   try {
-    // Try to get updated price from Polygon.io
-    let currentPrice = null;
-    try {
-      const stockData = await fetchStockPrice(item.symbol);
-      currentPrice = stockData.currentPrice;
-    } catch (priceError) {
-      console.warn(`Couldn't fetch current price for ${item.symbol}:`, priceError);
-    }
-    
     const { data, error } = await supabase
       .from('portfolio')
       .update({
         shares: item.shares,
         avg_price: item.avg_price,
-        current_price: currentPrice || item.current_price,
         target_price: item.target_price,
         notes: item.notes
       })
@@ -134,65 +108,205 @@ export const deletePortfolioItem = async (id: string): Promise<void> => {
   }
 };
 
-// Helper function to calculate portfolio metrics for a single item
-const calculatePortfolioItemMetrics = (item: PortfolioItem, currentPrice?: number): PortfolioItem => {
-  if (currentPrice && currentPrice > 0) {
-    const value = currentPrice * item.shares;
-    const cost_basis = item.avg_price * item.shares;
-    const profit_loss = value - cost_basis;
-    const profit_loss_percent = (profit_loss / cost_basis) * 100;
+// Class for managing real-time portfolio data
+export class PortfolioManager {
+  private items: PortfolioItem[] = [];
+  private subscriptions: Map<string, () => void> = new Map();
+  private callbacks: Set<(items: PortfolioItem[]) => void> = new Set();
+  
+  constructor() {}
+  
+  // Initialize portfolio with data
+  async initialize(): Promise<void> {
+    try {
+      const portfolio = await getPortfolio();
+      this.items = portfolio;
+      
+      // Set up WebSocket subscriptions for each symbol
+      for (const item of this.items) {
+        this.subscribeToSymbol(item.symbol);
+      }
+      
+      // Notify all callbacks with initial data
+      this.notifyCallbacks();
+    } catch (error) {
+      console.error('Error initializing portfolio manager:', error);
+      throw error;
+    }
+  }
+  
+  // Get all portfolio items
+  getItems(): PortfolioItem[] {
+    return [...this.items];
+  }
+  
+  // Subscribe to updates for a symbol
+  private subscribeToSymbol(symbol: string): void {
+    // Unsubscribe existing subscription if any
+    if (this.subscriptions.has(symbol)) {
+      const unsubscribe = this.subscriptions.get(symbol);
+      if (unsubscribe) unsubscribe();
+      this.subscriptions.delete(symbol);
+    }
     
-    return {
-      ...item,
-      current_price: currentPrice,
-      value,
-      cost_basis,
-      profit_loss,
-      profit_loss_percent
+    // Create new subscription
+    subscribeToStockPrice(symbol, (stockData) => {
+      // Find all items with this symbol and update them
+      let updated = false;
+      
+      for (let i = 0; i < this.items.length; i++) {
+        if (this.items[i].symbol === symbol) {
+          const currentPrice = stockData.currentPrice;
+          const shares = this.items[i].shares;
+          const avg_price = this.items[i].avg_price;
+          
+          const value = currentPrice * shares;
+          const cost_basis = avg_price * shares;
+          const profit_loss = value - cost_basis;
+          const profit_loss_percent = (profit_loss / cost_basis) * 100;
+          
+          this.items[i] = {
+            ...this.items[i],
+            current_price: currentPrice,
+            value,
+            cost_basis,
+            profit_loss,
+            profit_loss_percent
+          };
+          
+          updated = true;
+        }
+      }
+      
+      // If any items were updated, notify callbacks
+      if (updated) {
+        this.notifyCallbacks();
+      }
+    }).then(unsubscribe => {
+      this.subscriptions.set(symbol, unsubscribe);
+    }).catch(error => {
+      console.error(`Error subscribing to ${symbol}:`, error);
+    });
+  }
+  
+  // Remove a subscription
+  private unsubscribeFromSymbol(symbol: string): void {
+    if (this.subscriptions.has(symbol)) {
+      const unsubscribe = this.subscriptions.get(symbol);
+      if (unsubscribe) unsubscribe();
+      this.subscriptions.delete(symbol);
+    }
+  }
+  
+  // Add a new portfolio item
+  async addItem(item: PortfolioItem): Promise<void> {
+    try {
+      const newItem = await addPortfolioItem(item);
+      this.items.push(newItem);
+      this.subscribeToSymbol(newItem.symbol);
+      this.notifyCallbacks();
+    } catch (error) {
+      console.error('Error adding portfolio item:', error);
+      throw error;
+    }
+  }
+  
+  // Update a portfolio item
+  async updateItem(item: PortfolioItem): Promise<void> {
+    try {
+      const updatedItem = await updatePortfolioItem(item);
+      
+      // Find and replace the item
+      const index = this.items.findIndex(i => i.id === updatedItem.id);
+      if (index !== -1) {
+        // Check if symbol changed
+        const oldSymbol = this.items[index].symbol;
+        
+        this.items[index] = updatedItem;
+        
+        // If symbol changed, update subscriptions
+        if (oldSymbol !== updatedItem.symbol) {
+          this.unsubscribeFromSymbol(oldSymbol);
+          this.subscribeToSymbol(updatedItem.symbol);
+        }
+        
+        this.notifyCallbacks();
+      }
+    } catch (error) {
+      console.error('Error updating portfolio item:', error);
+      throw error;
+    }
+  }
+  
+  // Delete a portfolio item
+  async deleteItem(id: string): Promise<void> {
+    try {
+      // Find the item to get its symbol
+      const index = this.items.findIndex(i => i.id === id);
+      if (index !== -1) {
+        const symbol = this.items[index].symbol;
+        
+        // Delete from DB
+        await deletePortfolioItem(id);
+        
+        // Remove from local array
+        this.items.splice(index, 1);
+        
+        // Check if we need to unsubscribe
+        const hasOtherSymbol = this.items.some(i => i.symbol === symbol);
+        if (!hasOtherSymbol) {
+          this.unsubscribeFromSymbol(symbol);
+        }
+        
+        this.notifyCallbacks();
+      }
+    } catch (error) {
+      console.error('Error deleting portfolio item:', error);
+      throw error;
+    }
+  }
+  
+  // Subscribe to portfolio updates
+  subscribe(callback: (items: PortfolioItem[]) => void): () => void {
+    this.callbacks.add(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      this.callbacks.delete(callback);
     };
   }
   
-  return item;
-};
-
-// Get portfolio with current prices from Polygon.io
-export const getPortfolioWithCurrentPrices = async (): Promise<PortfolioItem[]> => {
-  try {
-    const portfolio = await getPortfolio();
-    
-    // Fetch current prices for all symbols using Polygon.io
-    const portfolioWithPrices = await Promise.all(
-      portfolio.map(async (item) => {
-        try {
-          const stockData = await fetchStockPrice(item.symbol);
-          return calculatePortfolioItemMetrics(item, stockData.currentPrice);
-        } catch (error) {
-          console.error(`Error fetching price for ${item.symbol}:`, error);
-          // Return the item without current price data
-          return item;
-        }
-      })
-    );
-    
-    return portfolioWithPrices;
-  } catch (error) {
-    console.error('Error getting portfolio with prices:', error);
-    throw error;
+  // Notify all callbacks with current data
+  private notifyCallbacks(): void {
+    for (const callback of this.callbacks) {
+      callback([...this.items]);
+    }
   }
-};
-
-// Get portfolio summary data
-export const getPortfolioSummary = async () => {
-  try {
-    const portfolio = await getPortfolioWithCurrentPrices();
-    
-    const totalValue = portfolio.reduce((sum, item) => sum + (item.value || 0), 0);
-    const totalCost = portfolio.reduce((sum, item) => sum + (item.cost_basis || 0), 0);
-    const totalProfit = portfolio.reduce((sum, item) => sum + (item.profit_loss || 0), 0);
+  
+  // Refresh all data
+  async refreshData(): Promise<void> {
+    try {
+      // Get fresh data from WebSockets
+      for (const item of this.items) {
+        this.unsubscribeFromSymbol(item.symbol);
+        this.subscribeToSymbol(item.symbol);
+      }
+      
+      this.notifyCallbacks();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    }
+  }
+  
+  // Get portfolio summary data
+  getPortfolioSummary() {
+    const totalValue = this.items.reduce((sum, item) => sum + (item.value || 0), 0);
+    const totalCost = this.items.reduce((sum, item) => sum + (item.cost_basis || 0), 0);
+    const totalProfit = this.items.reduce((sum, item) => sum + (item.profit_loss || 0), 0);
     const totalProfitPercent = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
     
     // Calculate allocation percentages
-    const portfolioWithAllocation = portfolio.map(item => ({
+    const portfolioWithAllocation = this.items.map(item => ({
       ...item,
       allocation: totalValue > 0 ? ((item.value || 0) / totalValue) * 100 : 0
     }));
@@ -204,39 +318,48 @@ export const getPortfolioSummary = async () => {
       totalProfitPercent,
       items: portfolioWithAllocation
     };
+  }
+  
+  // Clean up all subscriptions
+  cleanup(): void {
+    for (const unsubscribe of this.subscriptions.values()) {
+      unsubscribe();
+    }
+    this.subscriptions.clear();
+    this.callbacks.clear();
+  }
+}
+
+// Create singleton instance
+const portfolioManager = new PortfolioManager();
+
+// Export functions for backward compatibility
+export const getPortfolioWithCurrentPrices = async (): Promise<PortfolioItem[]> => {
+  try {
+    // Initialize manager if needed
+    if (portfolioManager.getItems().length === 0) {
+      await portfolioManager.initialize();
+    }
+    
+    return portfolioManager.getItems();
+  } catch (error) {
+    console.error('Error getting portfolio with prices:', error);
+    throw error;
+  }
+};
+
+export const getPortfolioSummary = async () => {
+  try {
+    // Initialize manager if needed
+    if (portfolioManager.getItems().length === 0) {
+      await portfolioManager.initialize();
+    }
+    
+    return portfolioManager.getPortfolioSummary();
   } catch (error) {
     console.error('Error getting portfolio summary:', error);
     throw error;
   }
 };
 
-// Get historical prices for portfolio items
-export const getPortfolioHistoricalPrices = async (timeframe: string = 'month'): Promise<any> => {
-  try {
-    const portfolio = await getPortfolio();
-    const symbols = portfolio.map(item => item.symbol);
-    
-    // This function would need to be implemented in polygonService.ts
-    // to fetch historical price data for multiple symbols
-    // For now, this is a placeholder
-    
-    // Return mock data for now
-    return {
-      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-      datasets: symbols.map(symbol => ({
-        symbol,
-        data: [
-          Math.random() * 100 + 100,
-          Math.random() * 100 + 100,
-          Math.random() * 100 + 100,
-          Math.random() * 100 + 100,
-          Math.random() * 100 + 100,
-          Math.random() * 100 + 100
-        ]
-      }))
-    };
-  } catch (error) {
-    console.error('Error getting historical prices:', error);
-    throw error;
-  }
-};
+export { portfolioManager };

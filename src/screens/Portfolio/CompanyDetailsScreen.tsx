@@ -85,9 +85,9 @@ export default function CompanyDetailsScreen({ symbol }: CompanyDetailsScreenPro
       // Get historical data from Polygon API
       const data = await fetchHistoricalPrices(
         symbol as string,
-        'day',
         from,
-        to
+        to,
+        '1d',
       );
       
       setHistoricalData(data);

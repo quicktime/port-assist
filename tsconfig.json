@@ -13,6 +13,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "target": "ESNext",
+    "module": "ESNext",
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
