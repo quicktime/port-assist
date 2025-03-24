@@ -100,12 +100,6 @@ yarn web
    chmod +x deploy.sh
    ./deploy.sh
    ```
-   
-## Monthly Investment Plan
-
-The app is designed to accommodate your investment strategy:
-- Current portfolio: 100 shares RXRX, 100 shares ACHR, 80 shares HOOD
-- Monthly investment: $777 until the end of 2025
 
 ## License
 
