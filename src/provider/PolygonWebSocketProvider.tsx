@@ -1,4 +1,3 @@
-// src/provider/PolygonWebSocketProvider.tsx
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { wsManager } from '../screens/services/polygonService';
@@ -9,6 +8,8 @@ interface PolygonWebSocketContextProps {
   connect: () => Promise<void>;
   disconnect: () => void;
   connectionError: string | null;
+  subscribe: (channel: string, ticker: string) => void;
+  unsubscribe: (channel: string, ticker: string) => void;
 }
 
 // Create the context
@@ -17,6 +18,8 @@ const PolygonWebSocketContext = createContext<PolygonWebSocketContextProps>({
   connect: async () => {},
   disconnect: () => {},
   connectionError: null,
+  subscribe: () => {},
+  unsubscribe: () => {},
 });
 
 // Hook for using the websocket context
@@ -27,20 +30,35 @@ export const PolygonWebSocketProvider: React.FC<{ children: React.ReactNode }> =
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  // Connect to the WebSocket server - defined with useCallback to avoid recreation
+  // Connect to the WebSocket server
   const connect = useCallback(async () => {
     try {
+      // Reset previous error state
+      setConnectionError(null);
+      
+      // Attempt connection
       await wsManager.connect();
+      
+      // Success will be handled by event listeners
     } catch (error) {
       console.error('Error connecting to Polygon WebSocket:', error);
-      setConnectionError('Connection failed');
+      setConnectionError(error instanceof Error ? error.message : 'Connection failed');
     }
   }, []);
 
-  // Disconnect from the WebSocket server - defined with useCallback to avoid recreation
+  // Disconnect from the WebSocket server
   const disconnect = useCallback(() => {
     wsManager.disconnect();
-    setIsConnected(false);
+  }, []);
+
+  // Subscribe to a channel and ticker
+  const subscribe = useCallback((channel: string, ticker: string) => {
+    wsManager.subscribe(channel, ticker);
+  }, []);
+
+  // Unsubscribe from a channel and ticker
+  const unsubscribe = useCallback((channel: string, ticker: string) => {
+    wsManager.unsubscribe(channel, ticker);
   }, []);
 
   // Handle app state changes (foreground/background)
@@ -61,24 +79,34 @@ export const PolygonWebSocketProvider: React.FC<{ children: React.ReactNode }> =
 
     // Event handler functions
     const handleAuthenticated = () => {
+      console.log('Polygon WebSocket authenticated successfully');
       setIsConnected(true);
       setConnectionError(null);
     };
 
     const handleAuthFailed = (message: string) => {
+      console.error('Polygon WebSocket authentication failed:', message);
       setIsConnected(false);
       setConnectionError(`Authentication failed: ${message}`);
     };
 
     const handleMaxReconnect = () => {
+      console.error('Polygon WebSocket max reconnection attempts reached');
       setIsConnected(false);
       setConnectionError('Maximum reconnection attempts reached');
+    };
+
+    const handleConnectionError = (error: any) => {
+      console.error('Polygon WebSocket connection error:', error);
+      setIsConnected(false);
+      setConnectionError(error instanceof Error ? error.message : 'Connection error');
     };
 
     // Set up listeners
     wsManager.events.on('authenticated', handleAuthenticated);
     wsManager.events.on('auth_failed', handleAuthFailed);
     wsManager.events.on('max_reconnect_attempts', handleMaxReconnect);
+    wsManager.events.on('connection_error', handleConnectionError);
 
     // Initial connection
     connect();
@@ -89,7 +117,8 @@ export const PolygonWebSocketProvider: React.FC<{ children: React.ReactNode }> =
       wsManager.events.off('authenticated', handleAuthenticated);
       wsManager.events.off('auth_failed', handleAuthFailed);
       wsManager.events.off('max_reconnect_attempts', handleMaxReconnect);
-      
+      wsManager.events.off('connection_error', handleConnectionError);
+     
       // Disconnect WebSocket when component unmounts
       disconnect();
     };
@@ -100,6 +129,8 @@ export const PolygonWebSocketProvider: React.FC<{ children: React.ReactNode }> =
     connect,
     disconnect,
     connectionError,
+    subscribe,
+    unsubscribe,
   };
 
   return (

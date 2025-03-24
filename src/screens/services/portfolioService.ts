@@ -350,11 +350,10 @@ export const getPortfolioWithCurrentPrices = async (): Promise<PortfolioItem[]> 
 
 export const getPortfolioSummary = async () => {
   try {
-    // Initialize manager if needed
-    if (portfolioManager.getItems().length === 0) {
-      await portfolioManager.initialize();
-    }
+    // Always initialize to ensure fresh data and WebSocket connections
+    await portfolioManager.initialize();
     
+    // Return summary based on the most recent data
     return portfolioManager.getPortfolioSummary();
   } catch (error) {
     console.error('Error getting portfolio summary:', error);
