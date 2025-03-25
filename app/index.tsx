@@ -1,3 +1,4 @@
+// app/index.tsx
 import { Redirect } from 'expo-router';
 import { useAuth } from '../src/hooks/useAuth';
 
@@ -11,7 +12,7 @@ export default function Index() {
   
   // Route based on authentication state
   if (isAuthenticated) {
-    return <Redirect href="/(app)" />;
+    return <Redirect href="/(app)/dashboard" />;
   } else {
     return <Redirect href="/(auth)/login" />;
   }

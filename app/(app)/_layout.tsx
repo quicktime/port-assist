@@ -1,4 +1,4 @@
-// app/(app)/_layout.tsx (Updated version)
+// app/(app)/_layout.tsx
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { useAuth } from '../../src/hooks/useAuth';
@@ -8,7 +8,7 @@ import { useAppTheme } from '../../src/provider/ThemeProvider';
 
 export default function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { isDarkMode, theme } = useAppTheme();
+  const { theme } = useAppTheme();
   
   // If not authenticated, redirect to login
   if (!isAuthenticated && !isLoading) {
@@ -28,11 +28,11 @@ export default function AppLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="dashboard"
         options={{
-          title: "Home",
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" color={color} size={size} />
+            <MaterialCommunityIcons name="view-dashboard" color={color} size={size} />
           ),
         }}
       />
@@ -46,11 +46,20 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="options-portfolio"
+        name="options"
         options={{
           title: "Options",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="chart-timeline-variant" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="cog" color={color} size={size} />
           ),
         }}
       />
@@ -63,13 +72,24 @@ export default function AppLayout() {
           ),
         }}
       />
+      
+      {/* Hide these screens from tab bar */}
       <Tabs.Screen
         name="about"
         options={{
-          title: "About",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="information" color={color} size={size} />
-          ),
+          href: null, // Prevents the tab from appearing in the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="company-details"
+        options={{
+          href: null, // Prevents the tab from appearing in the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          href: null, // Prevents the tab from appearing in the tab bar
         }}
       />
     </Tabs>

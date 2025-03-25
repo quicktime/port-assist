@@ -4,7 +4,7 @@ import {
   polygonWebSocketService, 
   ConnectionState, 
   StockUpdateEvent 
-} from '../screens/services/polygonWebSocketService';
+} from '../services/polygon';
 
 interface UsePolygonWebSocketProps {
   symbols?: string[];

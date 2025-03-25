@@ -45,6 +45,7 @@ A cross-platform investment portfolio tracking application built with React Nati
    SUPABASE_URL=your_supabase_url
    SUPABASE_KEY=your_supabase_anon_key
    POLYGON_API_KEY=your_polygon_api_key
+   CLAUDE_API_KEY=you_claude_api_key
    ```
 
 ### Database Setup
