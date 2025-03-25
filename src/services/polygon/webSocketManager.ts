@@ -5,6 +5,7 @@ import { websocketClient } from '@polygon.io/client-js';
 import { ConnectionState, Market, StockUpdateEvent, OptionUpdateEvent } from './types';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import { SUPABASE_URL } from '@env';
+import { supabase } from '@/initSupabase';
 
 // Subscription throttling configuration
 interface ThrottleConfig {
@@ -1152,6 +1153,11 @@ class PolygonWebSocketManager {
     try {
       const baseUrl = 'https://api.polygon.io/';
       const apiKey = POLYGON_API_KEY;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData.session?.access_token;
+      if (!authToken) {
+        throw new Error('No authentication token found');
+      }
       
       // First try using the Edge Function
       try {
@@ -1162,6 +1168,7 @@ class PolygonWebSocketManager {
           method,
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
           },
           body: body ? JSON.stringify(body) : undefined
         });
