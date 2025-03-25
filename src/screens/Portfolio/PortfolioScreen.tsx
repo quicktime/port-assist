@@ -35,7 +35,10 @@ export default function PortfolioScreen() {
     totalValue: 0,
     totalCost: 0,
     totalProfit: 0,
-    totalProfitPercent: 0
+    totalProfitPercent: 0,
+    cashBalance: 0,
+    cashAllocation: 0,
+    totalPortfolioValue: 0
   });
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,7 +52,10 @@ export default function PortfolioScreen() {
         totalValue: summaryData.totalValue,
         totalCost: summaryData.totalCost,
         totalProfit: summaryData.totalProfit,
-        totalProfitPercent: summaryData.totalProfitPercent
+        totalProfitPercent: summaryData.totalProfitPercent,
+        cashBalance: summaryData.cashBalance || 0,
+        cashAllocation: summaryData.cashAllocation || 0,
+        totalPortfolioValue: summaryData.totalPortfolioValue || summaryData.totalValue
       });
       setPortfolio(summaryData.items);
     } catch (error) {
@@ -313,6 +319,38 @@ export default function PortfolioScreen() {
             />
           }
         />
+
+        {summary.cashBalance > 0 && (
+          <TouchableOpacity
+            onPress={() => router.push('/cash-management')}
+            style={styles.itemContainer}
+          >
+            <Card style={styles.card}>
+              <Card.Content>
+                <View style={styles.cardHeader}>
+                  <Text variant="titleLarge">Cash</Text>
+                  <IconButton
+                    icon="cash-multiple"
+                    size={20}
+                    onPress={() => router.push('/cash-management')}
+                  />
+                </View>
+
+                <Divider style={styles.divider} />
+
+                <View style={styles.cardRow}>
+                  <Text variant="bodyMedium">Available for investment</Text>
+                  <Text variant="bodyMedium">${summary.cashBalance.toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.cardRow}>
+                  <Text variant="bodyMedium">Allocation</Text>
+                  <Text variant="bodyMedium">{summary.cashAllocation.toFixed(2)}%</Text>
+                </View>
+              </Card.Content>
+            </Card>
+          </TouchableOpacity>
+        )}
 
         {portfolio.length === 0 && (
           <View style={styles.emptyState}>

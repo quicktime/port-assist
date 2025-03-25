@@ -113,6 +113,19 @@ export default function TradeRecommendationsScreen() {
     return action === 'buy' ? paperTheme.colors.primary : paperTheme.colors.error;
   };
   
+  // Safe format function that handles non-number values
+  const safeNumberFormat = (value: any, decimals: number = 2): string => {
+    // Check if value is a valid number
+    if (typeof value === 'number' && !isNaN(value)) {
+      return value.toFixed(decimals);
+    } else if (typeof value === 'string' && !isNaN(Number(value))) {
+      // Try to convert string to number
+      return Number(value).toFixed(decimals);
+    }
+    // Return a dash for invalid values
+    return '-';
+  };
+  
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -204,7 +217,7 @@ export default function TradeRecommendationsScreen() {
               <Text variant="titleLarge">Trade Recommendations</Text>
             </View>
             
-            {recommendations.recommendations.length > 0 ? (
+            {recommendations.recommendations && recommendations.recommendations.length > 0 ? (
               recommendations.recommendations.map((recommendation, index) => (
                 <Card 
                   key={index} 
@@ -270,13 +283,17 @@ export default function TradeRecommendationsScreen() {
                             
                             <DataTable.Row>
                               <DataTable.Cell>Estimated Cost</DataTable.Cell>
-                              <DataTable.Cell numeric>${recommendation.estimatedCost.toFixed(2)}</DataTable.Cell>
+                              <DataTable.Cell numeric>
+                                ${safeNumberFormat(recommendation.estimatedCost)}
+                              </DataTable.Cell>
                             </DataTable.Row>
                             
-                            {recommendation.strike && (
+                            {recommendation.strike !== undefined && (
                               <DataTable.Row>
                                 <DataTable.Cell>Strike Price</DataTable.Cell>
-                                <DataTable.Cell numeric>${recommendation.strike.toFixed(2)}</DataTable.Cell>
+                                <DataTable.Cell numeric>
+                                  ${safeNumberFormat(recommendation.strike)}
+                                </DataTable.Cell>
                               </DataTable.Row>
                             )}
                             
@@ -287,17 +304,21 @@ export default function TradeRecommendationsScreen() {
                               </DataTable.Row>
                             )}
                             
-                            {recommendation.stopLoss && (
+                            {recommendation.stopLoss !== undefined && (
                               <DataTable.Row>
                                 <DataTable.Cell>Stop Loss</DataTable.Cell>
-                                <DataTable.Cell numeric>${recommendation.stopLoss.toFixed(2)}</DataTable.Cell>
+                                <DataTable.Cell numeric>
+                                  ${safeNumberFormat(recommendation.stopLoss)}
+                                </DataTable.Cell>
                               </DataTable.Row>
                             )}
                             
-                            {recommendation.takeProfit && (
+                            {recommendation.takeProfit !== undefined && (
                               <DataTable.Row>
                                 <DataTable.Cell>Take Profit</DataTable.Cell>
-                                <DataTable.Cell numeric>${recommendation.takeProfit.toFixed(2)}</DataTable.Cell>
+                                <DataTable.Cell numeric>
+                                  ${safeNumberFormat(recommendation.takeProfit)}
+                                </DataTable.Cell>
                               </DataTable.Row>
                             )}
                           </DataTable>

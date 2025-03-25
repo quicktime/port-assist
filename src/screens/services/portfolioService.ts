@@ -160,16 +160,20 @@ export const getPortfolioWithCurrentPrices = async (): Promise<PortfolioItem[]> 
 export const getPortfolioSummary = async () => {
   try {
     const portfolio = await getPortfolioWithCurrentPrices();
+    const cashBalance = await getCashBalance();
     
     const totalValue = portfolio.reduce((sum, item) => sum + (item.value || 0), 0);
     const totalCost = portfolio.reduce((sum, item) => sum + (item.cost_basis || 0), 0);
     const totalProfit = portfolio.reduce((sum, item) => sum + (item.profit_loss || 0), 0);
     const totalProfitPercent = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
     
+    // Calculate total portfolio value including cash
+    const totalPortfolioValue = totalValue + cashBalance;
+    
     // Calculate allocation percentages
     const portfolioWithAllocation = portfolio.map(item => ({
       ...item,
-      allocation: totalValue > 0 ? ((item.value || 0) / totalValue) * 100 : 0
+      allocation: totalPortfolioValue > 0 ? ((item.value || 0) / totalPortfolioValue) * 100 : 0
     }));
     
     return {
@@ -177,7 +181,10 @@ export const getPortfolioSummary = async () => {
       totalCost,
       totalProfit,
       totalProfitPercent,
-      items: portfolioWithAllocation
+      items: portfolioWithAllocation,
+      cashBalance,
+      cashAllocation: totalPortfolioValue > 0 ? (cashBalance / totalPortfolioValue) * 100 : 0,
+      totalPortfolioValue
     };
   } catch (error) {
     console.error('Error getting portfolio summary:', error);
@@ -227,6 +234,83 @@ export const getPortfolioItemById = async (id: string): Promise<PortfolioItem | 
     }
   } catch (error) {
     console.error('Error fetching portfolio item:', error);
+    throw error;
+  }
+};
+
+// Get cash balance for the current user
+export const getCashBalance = async (): Promise<number> => {
+  try {
+    // Get the current user's ID
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+    
+    if (!userId) {
+      throw new Error('No authenticated user found');
+    }
+    
+    const { data, error } = await supabase
+      .from('cash_balance')
+      .select('*')
+      .eq('user_id', userId)  // Filter by the current user's ID
+      .maybeSingle();
+    
+    if (error) {
+      throw new Error(error.message);
+    }
+    
+    return data?.amount || 0;
+  } catch (error) {
+    console.error('Error fetching cash balance:', error);
+    return 0;
+  }
+};
+
+// Update cash balance
+export const updateCashBalance = async (amount: number): Promise<void> => {
+  try {
+    // Get the current user's ID
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+    
+    if (!userId) {
+      throw new Error('No authenticated user found');
+    }
+    
+    const { data: existingBalance } = await supabase
+      .from('cash_balance')
+      .select('id')
+      .eq('user_id', userId)  // Filter by the current user's ID
+      .maybeSingle();
+    
+    if (existingBalance) {
+      // Update existing record
+      const { error } = await supabase
+        .from('cash_balance')
+        .update({ 
+          amount, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', existingBalance.id);
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+    } else {
+      // Create new record
+      const { error } = await supabase
+        .from('cash_balance')
+        .insert([{ 
+          amount,
+          user_id: userId  // Include the user_id in the insert
+        }]);
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+  } catch (error) {
+    console.error('Error updating cash balance:', error);
     throw error;
   }
 };

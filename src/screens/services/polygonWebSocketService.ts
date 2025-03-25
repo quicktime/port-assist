@@ -1,6 +1,8 @@
-import { POLYGON_API_KEY } from '@env';
+// src/screens/services/polygonWebSocketService.ts
+import { POLYGON_API_KEY, SUPABASE_URL } from '@env';
 import EventEmitter from 'eventemitter3';
 import { websocketClient } from '@polygon.io/client-js';
+import { supabase } from '../../initSupabase';
 
 // Define event types
 export type StockUpdateEvent = {
@@ -82,7 +84,7 @@ class PolygonWebSocketService {
   }
   
   // Connect to Stocks WebSocket
-  private connectStocks(): void {
+  private async connectStocks(): Promise<void> {
     if (this.stocksConnectionState === ConnectionState.CONNECTED ||
         this.stocksConnectionState === ConnectionState.CONNECTING) {
       return;
@@ -92,7 +94,16 @@ class PolygonWebSocketService {
     this.emitConnectionStateChange(Market.STOCKS);
     
     try {
-      // Create the WebSocket client using the Polygon.io library
+      // Get the auth session for the Supabase Edge Function
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData.session?.access_token;
+      
+      // Two options for implementation:
+      // 1. Use the Polygon client library (keeping existing functionality)
+      // 2. Use the Supabase Edge Function as a proxy
+      
+      // Using option 1 for now to maintain existing functionality
+      // But adding auth token headers for future Edge Function use
       this.stocksWS = websocketClient(POLYGON_API_KEY).stocks();
       
       // Setup event handlers
@@ -111,7 +122,7 @@ class PolygonWebSocketService {
   }
   
   // Connect to Options WebSocket
-  private connectOptions(): void {
+  private async connectOptions(): Promise<void> {
     if (this.optionsConnectionState === ConnectionState.CONNECTED ||
         this.optionsConnectionState === ConnectionState.CONNECTING) {
       return;
@@ -121,6 +132,10 @@ class PolygonWebSocketService {
     this.emitConnectionStateChange(Market.OPTIONS);
     
     try {
+      // Get the auth session for the Supabase Edge Function
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData.session?.access_token;
+      
       // Create the WebSocket client using the Polygon.io library
       this.optionsWS = websocketClient(POLYGON_API_KEY).options();
       
@@ -649,6 +664,39 @@ class PolygonWebSocketService {
     }
     
     this.eventEmitter.removeAllListeners();
+  }
+
+  // Helper method to make REST API calls through the polygon-proxy Edge Function
+  public async makePolygonRequest(endpoint: string, method: 'GET' | 'POST' = 'GET', body?: any): Promise<any> {
+    try {
+      // Get auth token for Supabase Edge Function
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData.session?.access_token;
+      
+      if (!authToken) {
+        throw new Error('No authentication token available');
+      }
+      
+      const url = `${SUPABASE_URL}/functions/v1/polygon-proxy?endpoint=${encodeURIComponent(endpoint)}`;
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        ...(body && { body: JSON.stringify(body) })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error calling Polygon API: ${response.status} ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error making Polygon request:', error);
+      throw error;
+    }
   }
 }
 

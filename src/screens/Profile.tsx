@@ -216,6 +216,14 @@ export default function Profile() {
             >
               Add New Contribution
             </Button>
+            <Button
+              mode="contained"
+              onPress={() => router.push('/cash-management')}
+              icon="cash-multiple"
+              style={{ marginTop: 10 }}
+            >
+              Manage Cash Balance
+            </Button>
           </Surface>
         </View>
       </ScrollView>
