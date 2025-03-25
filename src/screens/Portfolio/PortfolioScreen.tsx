@@ -15,7 +15,7 @@ import {
   ActivityIndicator
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { 
+import {
   PortfolioItem,
   getPortfolio,
   getPortfolioSummary,
@@ -65,11 +65,11 @@ export default function PortfolioScreen() {
 
     // Automatically refresh data every 5 minutes when market is open
     let refreshInterval: NodeJS.Timeout | null = null;
-    
+
     const setupRefreshInterval = async () => {
       try {
         const marketStatus = await fetchMarketStatus();
-        
+
         if (marketStatus === "open") {
           refreshInterval = setInterval(async () => {
             try {
@@ -84,7 +84,7 @@ export default function PortfolioScreen() {
         console.error("Error checking market status:", error);
       }
     };
-    
+
     setupRefreshInterval();
 
     // Cleanup on unmount
@@ -117,14 +117,14 @@ export default function PortfolioScreen() {
 
   const handleDeleteStock = async (id?: string) => {
     if (!id) return;
-    
+
     Alert.alert(
       "Delete Stock",
       "Are you sure you want to delete this stock from your portfolio?",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
+        {
+          text: "Delete",
           style: "destructive",
           onPress: async () => {
             try {
@@ -146,7 +146,7 @@ export default function PortfolioScreen() {
 
   const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => {
     const isProfitable = (item.profit_loss_percent || 0) >= 0;
-    
+
     return (
       <TouchableOpacity
         onPress={() => handleEditStock(item)}
@@ -163,14 +163,14 @@ export default function PortfolioScreen() {
                 onPress={() => handleViewOptions(item.symbol)}
               />
             </View>
-            
+
             <Divider style={styles.divider} />
-            
+
             <View style={styles.cardRow}>
               <Text variant="bodyMedium">{item.shares} shares @ ${item.avg_price.toFixed(2)}</Text>
               <Text variant="bodyMedium">${item.current_price?.toFixed(2) || "N/A"}</Text>
             </View>
-            
+
             <View style={styles.cardRow}>
               <Text variant="bodyMedium">Value: ${item.value?.toFixed(2) || "N/A"}</Text>
               <Text
@@ -231,9 +231,9 @@ export default function PortfolioScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <Appbar.Header>
           <Appbar.Content title="Portfolio" />
-          <Appbar.Action 
-            icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
-            onPress={toggleTheme} 
+          <Appbar.Action
+            icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
+            onPress={toggleTheme}
           />
         </Appbar.Header>
         <View style={styles.loadingContainer}>
@@ -248,9 +248,9 @@ export default function PortfolioScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Appbar.Header>
         <Appbar.Content title="Portfolio" />
-        <Appbar.Action 
-          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
-          onPress={toggleTheme} 
+        <Appbar.Action
+          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
+          onPress={toggleTheme}
         />
       </Appbar.Header>
 
@@ -260,12 +260,12 @@ export default function PortfolioScreen() {
             <Text variant="titleMedium">Total Value</Text>
             <Text variant="titleMedium">${summary.totalValue.toFixed(2)}</Text>
           </View>
-          
+
           <View style={styles.summaryRow}>
             <Text variant="bodyMedium">Cost Basis</Text>
             <Text variant="bodyMedium">${summary.totalCost.toFixed(2)}</Text>
           </View>
-          
+
           <View style={styles.summaryRow}>
             <Text variant="bodyMedium">Profit/Loss</Text>
             <Text
@@ -278,18 +278,27 @@ export default function PortfolioScreen() {
             </Text>
           </View>
         </Surface>
-
         <View style={styles.holdingsHeader}>
           <Text variant="titleLarge">Holdings</Text>
-          <Button
-            mode="contained"
-            onPress={handleAddStock}
-            icon="plus"
-          >
-            Add Stock
-          </Button>
+          <View style={styles.headerButtons}>
+            <Button
+              mode="contained"
+              onPress={handleAddStock}
+              icon="plus"
+              style={styles.headerButton}
+            >
+              Add Stock
+            </Button>
+            <Button
+              mode="contained-tonal"
+              onPress={() => router.push('/trade-recommendations')}
+              icon="finance"
+              style={styles.headerButton}
+            >
+              Get Trade Ideas
+            </Button>
+          </View>
         </View>
-
         <FlatList
           data={displayedPortfolio}
           renderItem={renderPortfolioItem}
@@ -346,6 +355,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 24,
     marginBottom: 16,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  headerButton: {
+    marginLeft: 8,
+    marginBottom: 4,
   },
   listContainer: {
     paddingBottom: 16,

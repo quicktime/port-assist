@@ -34,11 +34,12 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ],
+, "supabase/functions/claude-proxy/index.js"  ],
   "exclude": [
     "node_modules",
     "babel.config.js",
     "metro.config.js",
-    "jest.config.js"
+    "jest.config.js",
+    "supabase/functions/**" // Add this line to exclude Supabase functions
   ]
 }
