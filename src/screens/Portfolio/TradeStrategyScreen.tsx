@@ -20,12 +20,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
-import { TradeStrategyPreferences } from "../services/claudeService";
-import {
+import { 
   getTradeStrategy,
   updateTradeStrategy,
-  createDefaultTradeStrategy
-} from "../services/tradeStrategyService";
+  createDefaultTradeStrategy 
+} from "../../services/strategy";
+import { TradeStrategyPreferences } from "../../services/claude/types";
 
 export default function TradeStrategyScreen() {
   const { isDarkMode, toggleTheme } = useAppTheme();

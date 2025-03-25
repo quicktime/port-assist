@@ -1,45 +1,12 @@
-// src/screens/services/claudeService.ts
-import { supabase } from '../../initSupabase';
-import { PortfolioItem } from './portfolioService';
-import { OptionData, StockData } from './polygonService';
-import { SUPABASE_URL, SUPABASE_KEY } from "@env";
-
-// Types for Claude API
-export interface TradeStrategyPreferences {
-  riskTolerance: 'conservative' | 'moderate' | 'aggressive';
-  optionPreference: 'calls' | 'puts' | 'both';
-  expirationPreference: 'weekly' | 'monthly' | 'quarterly' | 'leaps';
-  strikePreference: 'ITM' | 'ATM' | 'OTM';
-  maxTradePercentage: number; // Maximum percentage of cash to use per trade
-  stopLossPercentage: number; // Default stop loss percentage
-  takeProfitPercentage: number; // Default take profit percentage
-  preferredStrategies: string[]; // Array of preferred strategies (e.g., ['covered calls', 'cash secured puts'])
-  technicalIndicators: string[]; // Preferred technical indicators to consider
-  fundamentalFactors: string[]; // Preferred fundamental factors to consider
-}
-
-export interface TradeRecommendation {
-  symbol: string;
-  action: 'buy' | 'sell';
-  type: 'stock' | 'call option' | 'put option' | 'spread' | 'other';
-  details: string;
-  strike?: number;
-  expiration?: string;
-  quantity: number;
-  estimatedCost: number;
-  stopLoss?: number;
-  takeProfit?: number;
-  reasoning: string;
-  riskLevel: 'low' | 'moderate' | 'high';
-}
-
-export interface TradeRecommendationsResponse {
-  timestamp: string;
-  recommendations: TradeRecommendation[];
-  marketOverview: string;
-  portfolioAnalysis: string;
-  cashRecommendation: string;
-}
+// src/services/claude/claudeService.ts
+import { SUPABASE_URL } from '@env';
+import { supabase } from '../../api/supabase';
+import { PortfolioItem } from '../portfolio/types';
+import { StockData, OptionData } from '../polygon/types';
+import { 
+  TradeStrategyPreferences,
+  TradeRecommendationsResponse 
+} from './types';
 
 /**
  * Generate a prompt for Claude based on portfolio, options, and strategy data
@@ -52,7 +19,6 @@ const generatePrompt = (
   strategy: TradeStrategyPreferences
 ): string => {
   // Format portfolio summary
-  // TODO Add Options Positions to Portfolio Summary
   const portfolioSummary = portfolio.map(item => 
     `${item.symbol}: ${item.shares} shares at avg price $${item.avg_price.toFixed(2)}, ` +
     `current price $${item.current_price?.toFixed(2) || 'unknown'}`
@@ -353,17 +319,22 @@ export const getTradeRecommendations = async (
     
     // Process each portfolio item sequentially to avoid API rate limits
     for (const item of portfolio) {
-      // Get stock data
-      const stock = await import('./polygonService').then(module => 
-        module.fetchStockPrice(item.symbol)
-      );
-      stockData[item.symbol] = stock;
-      
-      // Get options data
-      const options = await import('./polygonService').then(module => 
-        module.fetchOptionsData(item.symbol)
-      );
-      optionsData[item.symbol] = options;
+      try {
+        // Get stock data
+        const stock = await import('../polygon').then(module => 
+          module.fetchStockPrice(item.symbol)
+        );
+        stockData[item.symbol] = stock;
+        
+        // Get options data
+        const options = await import('../polygon').then(module => 
+          module.fetchOptionsData(item.symbol)
+        );
+        optionsData[item.symbol] = options;
+      } catch (error) {
+        console.error(`Error fetching data for ${item.symbol}:`, error);
+        // Continue with next item if one fails
+      }
     }
     
     // Generate recommendations using Claude API

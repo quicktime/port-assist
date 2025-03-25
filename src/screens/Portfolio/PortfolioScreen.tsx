@@ -21,8 +21,8 @@ import {
   getPortfolioSummary,
   deletePortfolioItem,
   getPortfolioWithCurrentPrices
-} from "../services/portfolioService";
-import { fetchMarketStatus } from '../services/polygonService';
+} from "../../services/portfolio";
+import { fetchMarketStatus } from '../../services/polygon';
 import { MainStackParamList } from "../../types/navigation";
 import { useAppTheme } from "../../provider/ThemeProvider";
 // WebSocket service import removed

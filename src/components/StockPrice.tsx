@@ -4,7 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import { usePolygonWebSocket } from '../hooks/usePolygonWebSocket';
 import CustomText from './ui/CustomText';
 import { useAppTheme } from '../provider/ThemeProvider';
-import { SubscriptionPriority } from '../services/polygon';
+import { SubscriptionPriority } from '../services/polygon/webSocketService';
 
 interface StockPriceProps {
   symbol: string;

@@ -26,6 +26,7 @@ const CustomLightTheme = {
     background: '#F5F5F5',
     card: '#FFFFFF',
     text: '#000000',
+    success: '#4CAF50'
   },
   // Make sure we define all font variants
   fonts: {
@@ -45,6 +46,7 @@ const CustomDarkTheme = {
     background: '#121212',
     card: '#1E1E1E',
     text: '#FFFFFF',
+    success: '#4CAF50'
   },
   // Make sure we define all font variants
   fonts: {

@@ -16,10 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { supabase } from "../../initSupabase";
-import { getPortfolioSummary } from "../services/portfolioService";
-import { getContributionSummary, Contribution } from "../services/contributionService";
-import { fetchMarketStatus } from "../services/polygonService";
+import { supabase } from "../../api/supabase";
+import { getPortfolioSummary } from "../../services/portfolio";
+import { getContributionSummary, Contribution } from "../../services/contribution";
+import { fetchMarketStatus } from "../../services/polygon";
 import { PieChart, LineChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width - 32; // Account for padding

@@ -4,9 +4,9 @@ import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useAppTheme } from '../provider/ThemeProvider';
 import CustomText from './ui/CustomText';
-import { PortfolioItem } from '../services/portfolio';
+import { PortfolioItem } from '../services/portfolio/types';
 import StockPrice from './StockPrice';
-import { SubscriptionPriority } from '../services/polygon';
+import { SubscriptionPriority } from '../services/polygon/webSocketService';
 import { router } from 'expo-router';
 
 interface PortfolioCardProps {

@@ -18,8 +18,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAppTheme } from "../../provider/ThemeProvider";
-import { supabase } from "../../initSupabase";
-import { batchUpdateOptionPrices } from "../services/polygonService";
+import { supabase } from "../../api/supabase";
+import { batchUpdateOptionPrices } from "../../services/polygon";
 import { usePolygonWebSocket } from "../../hooks/usePolygonWebSocket";
 
 export interface OptionPosition {

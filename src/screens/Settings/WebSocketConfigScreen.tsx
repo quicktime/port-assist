@@ -16,7 +16,7 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../provider/ThemeProvider";
-import { polygonWebSocketService, ConnectionState } from "../services/polygonWebSocketService";
+import { polygonWebSocketService, ConnectionState } from "../../services/polygon";
 import WebSocketStatus from "../../components/WebSocketStatus";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";

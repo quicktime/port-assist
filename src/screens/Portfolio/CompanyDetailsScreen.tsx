@@ -13,7 +13,7 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { fetchCompanyDetails, fetchStockPrice, fetchHistoricalPrices } from "../services/polygonService";
+import { fetchCompanyDetails, fetchStockPrice, fetchHistoricalPrices } from "../../services/polygon";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { LineChart } from "react-native-chart-kit";
 import { Dimensions } from "react-native";

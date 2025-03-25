@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Text, Surface, useTheme, Chip, Tooltip } from 'react-native-paper';
-import { polygonWebSocketService, ConnectionState } from '../screens/services/polygonWebSocketService';
+import { usePolygonWebSocket } from '../hooks/usePolygonWebSocket';
+import { ConnectionState } from '@/services';
 
 interface WebSocketStatusProps {
   showDetails?: boolean;
@@ -16,87 +17,55 @@ const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
   onDisconnect
 }) => {
   const theme = useTheme();
-  const [connectionState, setConnectionState] = useState<ConnectionState>(
-    polygonWebSocketService.getConnectionState()
-  );
-  const [subscriptions, setSubscriptions] = useState<string[]>([]);
+  const { 
+    connectionState, 
+    isConnected,
+    connect,
+    disconnect
+  } = usePolygonWebSocket({
+    enabled: true
+  });
   
-  useEffect(() => {
-    // Handle connection state changes
-    const handleConnectionStateChange = (state: ConnectionState) => {
-      setConnectionState(state);
-    };
-    
-    // Update subscriptions periodically
-    const updateSubscriptions = () => {
-      try {
-        setSubscriptions(polygonWebSocketService.getSubscriptions());
-      } catch (error) {
-        console.error("Error getting subscriptions:", error);
-      }
-    };
-    
-    const interval = setInterval(updateSubscriptions, 5000);
-    
-    // Add event listener
-    polygonWebSocketService.on('connectionStateChange', handleConnectionStateChange);
-    
-    // Initial subscriptions
-    updateSubscriptions();
-    
-    // Cleanup
-    return () => {
-      try {
-        polygonWebSocketService.off('connectionStateChange', handleConnectionStateChange);
-        clearInterval(interval);
-      } catch (error) {
-        console.error("Error cleaning up WebSocketStatus component:", error);
-      }
-    };
-  }, []);
+  // In the new implementation, we don't have direct access to subscriptions
+  // For now, we'll just show a placeholder - this would need to be implemented
+  // in the underlying hook or service if needed
+  const [subscriptions, setSubscriptions] = useState<string[]>([]);
   
   // Get status color based on connection state
   const getStatusColor = () => {
-    switch (connectionState) {
-      case ConnectionState.CONNECTED:
-        return theme.colors.primary;
-      case ConnectionState.CONNECTING:
-      case ConnectionState.RECONNECTING:
-        return theme.colors.tertiary;
-      case ConnectionState.ERROR:
-        return theme.colors.error;
-      case ConnectionState.DISCONNECTED:
-      default:
-        return theme.colors.error;
+    if (isConnected) {
+      return theme.colors.primary;
+    } else if (connectionState === ConnectionState.CONNECTING || connectionState === ConnectionState.RECONNECTING) {
+      return theme.colors.tertiary;
+    } else {
+      return theme.colors.error;
     }
   };
   
   // Get status text based on connection state
   const getStatusText = () => {
-    switch (connectionState) {
-      case ConnectionState.CONNECTED:
-        return 'Connected';
-      case ConnectionState.CONNECTING:
-        return 'Connecting...';
-      case ConnectionState.RECONNECTING:
-        return 'Reconnecting...';
-      case ConnectionState.ERROR:
-        return 'Error';
-      case ConnectionState.DISCONNECTED:
-      default:
-        return 'Disconnected';
+    if (isConnected) {
+      return 'Connected';
+    } else if (connectionState === ConnectionState.CONNECTING) {
+      return 'Connecting...';
+    } else if (connectionState === ConnectionState.RECONNECTING) {
+      return 'Reconnecting...';
+    } else if (connectionState === ConnectionState.ERROR) {
+      return 'Error';
+    } else {
+      return 'Disconnected';
     }
   };
   
   // Handle manual connect
   const handleConnect = () => {
-    polygonWebSocketService.connect();
+    connect();
     if (onConnect) onConnect();
   };
   
   // Handle manual disconnect
   const handleDisconnect = () => {
-    polygonWebSocketService.disconnect();
+    disconnect();
     if (onDisconnect) onDisconnect();
   };
   
@@ -120,13 +89,13 @@ const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
                 styles.button,
                 { 
                   backgroundColor: 
-                    connectionState === ConnectionState.DISCONNECTED
+                    !isConnected
                       ? theme.colors.primary
                       : theme.colors.surfaceDisabled
                 }
               ]}
               onPress={handleConnect}
-              disabled={connectionState !== ConnectionState.DISCONNECTED}
+              disabled={isConnected}
             >
               <Text style={[styles.buttonText, { color: theme.colors.onPrimary }]}>
                 Connect
@@ -138,13 +107,13 @@ const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
                 styles.button,
                 { 
                   backgroundColor: 
-                    connectionState === ConnectionState.CONNECTED
+                    isConnected
                       ? theme.colors.error
                       : theme.colors.surfaceDisabled
                 }
               ]}
               onPress={handleDisconnect}
-              disabled={connectionState !== ConnectionState.CONNECTED}
+              disabled={!isConnected}
             >
               <Text style={[styles.buttonText, { color: theme.colors.onPrimary }]}>
                 Disconnect

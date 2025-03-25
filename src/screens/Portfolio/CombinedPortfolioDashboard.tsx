@@ -18,10 +18,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
-import { getPortfolioSummary, PortfolioItem } from "../services/portfolioService";
-import { supabase } from "../../initSupabase";
+import { getPortfolioSummary, PortfolioItem } from "../../services/portfolio";
+import { supabase } from "../../api/supabase";
 import { OptionPosition } from "./OptionsPortfolioScreen";
-import { batchUpdateOptionPrices } from "../services/polygonService";
+import { batchUpdateOptionPrices } from "../../services/polygon";
 import { PieChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width - 32; // Account for padding

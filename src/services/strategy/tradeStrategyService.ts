@@ -1,6 +1,6 @@
-// src/screens/services/tradeStrategyService.ts
-import { supabase } from '../../initSupabase';
-import { TradeStrategyPreferences } from './claudeService';
+// src/services/strategy/tradeStrategyService.ts
+import { supabase } from '../../api/supabase';
+import { TradeStrategyPreferences } from '../claude/types';
 
 /**
  * Get the user's trade strategy preferences

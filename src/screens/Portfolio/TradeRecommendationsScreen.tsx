@@ -20,9 +20,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
-import { getTradeRecommendations, TradeRecommendation, TradeRecommendationsResponse } from "../services/claudeService";
-import { getTradeStrategy } from "../services/tradeStrategyService";
-import { getPortfolioWithCurrentPrices, getPortfolioSummary } from "../services/portfolioService";
+import { getTradeRecommendations, TradeRecommendation, TradeRecommendationsResponse } from "../../services/claude";
+import { getTradeStrategy } from "../../services/strategy";
+import { getPortfolioWithCurrentPrices, getPortfolioSummary } from "../../services/portfolio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function TradeRecommendationsScreen() {

@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAppTheme } from "../../provider/ThemeProvider";
-import { getCashBalance, updateCashBalance } from "../services/portfolioService";
+import { getCashBalance, updateCashBalance } from "../../services/portfolio";
 
 export default function CashManagementScreen() {
   const { isDarkMode, toggleTheme } = useAppTheme();

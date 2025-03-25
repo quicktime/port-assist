@@ -11,7 +11,7 @@ import {
   Chip,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { OptionData } from "../services/polygonService";
+import { OptionData } from "../../services/polygon";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
 

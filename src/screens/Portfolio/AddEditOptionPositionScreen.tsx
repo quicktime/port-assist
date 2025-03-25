@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../initSupabase";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAppTheme } from "../../provider/ThemeProvider";
-import { searchStocks, fetchOptionsData, OptionData } from "../services/polygonService";
+import { searchStocks, fetchOptionsData, OptionData } from "../../services/polygon";
 import { debounce } from 'lodash';
 import { OptionPosition } from "./OptionsPortfolioScreen";
 

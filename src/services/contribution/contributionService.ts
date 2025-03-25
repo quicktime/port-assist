@@ -1,15 +1,6 @@
-import { supabase } from '../../initSupabase';
-
-export interface Contribution {
-  id?: string;
-  user_id?: string;
-  amount: number;
-  date: string;
-  status: 'completed' | 'upcoming';
-  notes?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+// src/services/contribution/contributionService.ts
+import { supabase } from '../../api/supabase';
+import { Contribution, ContributionSummary } from './types';
 
 // Create the contributions table if it doesn't exist
 export const setupContributionsTable = async () => {
@@ -199,7 +190,7 @@ export const generateUpcomingContributions = async (
 };
 
 // Get contribution summary
-export const getContributionSummary = async () => {
+export const getContributionSummary = async (): Promise<ContributionSummary> => {
   try {
     const contributions = await getContributions();
     

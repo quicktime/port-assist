@@ -14,8 +14,8 @@ import {
   List
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { addPortfolioItem, updatePortfolioItem, PortfolioItem } from "../services/portfolioService";
-import { fetchStockPrice, searchStocks } from "../services/polygonService";
+import { addPortfolioItem, updatePortfolioItem, PortfolioItem } from "../../services/portfolio";
+import { fetchStockPrice, searchStocks } from "../../services/polygon";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router, useLocalSearchParams } from "expo-router";
 import { debounce } from 'lodash';

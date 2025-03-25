@@ -19,7 +19,7 @@ import {
   fetchStockPrice,
   OptionData,
   StockData
-} from "../services/polygonService";
+} from "../../services/polygon";
 import { usePolygonWebSocket } from "../../provider/PolygonWebSocketProvider";
 import { useAppTheme } from "../../provider/ThemeProvider";
 import { router } from "expo-router";
