@@ -52,6 +52,7 @@ const generatePrompt = (
   strategy: TradeStrategyPreferences
 ): string => {
   // Format portfolio summary
+  // TODO Add Options Positions to Portfolio Summary
   const portfolioSummary = portfolio.map(item => 
     `${item.symbol}: ${item.shares} shares at avg price $${item.avg_price.toFixed(2)}, ` +
     `current price $${item.current_price?.toFixed(2) || 'unknown'}`
@@ -98,7 +99,139 @@ const generatePrompt = (
 You are an experienced Day Trader with exceptional technical and fundamental analysis skills.
 
 TRADER STRATEGY SETTINGS:
-${strategySettings}
+Weekly Options Trading Strategy
+I've developed a comprehensive strategy that incorporates your existing positions, focuses on weekly options, and aims to build toward the wheel strategy as your capital grows.
+Core Strategy Components:
+1. Weekly Market Analysis (Every Monday Morning)
+
+Use the first hour of trading to assess market sentiment for each stock
+Evaluate technical indicators (RSI, MACD, moving averages)
+Monitor pre-market news for any catalysts
+Set up alerts for significant price moves during the day
+
+2. Weekly Options Selection Criteria
+For Bullish Outlook:
+Buy weekly call options 2-4% above current price
+
+For Bearish Outlook:
+Buy weekly put options 1-3 points below current price
+
+For Neutral or Uncertain Outlook:
+Consider implementing straddles (both puts and calls at same strike)
+
+3. Capital Allocation Rules
+
+Allocate 50% of weekly options budget to HOOD (priority stock)
+Allocate 25% each to RXRX and ACHR
+Maintain at least 30% of portfolio in cash for option writing purposes
+Never use margin as specified
+
+4. Position Sizing Guidelines
+
+Limit single option positions to 2-3% of total portfolio value
+For straddles, limit to 4% of portfolio value
+Add to positions only if initial option moves in favorable direction
+
+5. Exit Strategies (Automated Conditions to Set)
+For Long Calls:
+
+Take profit at 25% gain (limit order)
+Take profit at 50% gain on half position, let remainder run
+Stop loss at 20% loss
+Exit all positions by Thursday if not triggered (to avoid Friday expiration risk)
+
+For Long Puts:
+
+Take profit at 30% gain (limit order)
+Stop loss at 25% loss
+Exit all positions by Thursday if not triggered
+
+For Straddles:
+
+Take profit on call side at 40% gain if stock rises sharply
+Take profit on put side at 40% gain if stock falls sharply
+Exit entire straddle if combined value falls by 25%
+
+6. Hedging Strategy for Stock Purchases
+As you buy more shares:
+
+RXRX: For every 25 additional shares purchased, buy 1 protective put 10% out-of-the-money with 30-45 days expiration
+ACHR: For every 25 additional shares purchased, buy 1 protective put 10% out-of-the-money with 30-45 days expiration
+HOOD: For every 15 additional shares purchased, buy 1 protective put 10% out-of-the-money with 30-45 days expiration
+
+7. Priority Plan for Additional HOOD Shares
+
+Use $777 monthly allocation primarily for HOOD purchases
+Reinvest 40% of options profits into HOOD shares
+Target accumulating 100 shares of HOOD
+Once 100 shares are owned, begin implementing wheel strategy
+
+Implementation of the Wheel Strategy (Once You Have 100 Shares)
+Phase 1: Cash-Secured Puts
+
+Sell weekly cash-secured puts at strikes 5-7% below current price
+Collect premium and either get assigned shares (if price falls below strike) or keep premium (if price stays above strike)
+Maintain enough cash to cover 100 shares at strike price
+
+Phase 2: Covered Calls (After Assignment or With Your 100 Shares)
+
+Sell weekly covered calls at strikes 4-6% above your cost basis
+Collect premium and either have shares called away (if price rises above strike) or keep premium (if price stays below strike)
+
+Phase 3: Repeat the Wheel
+
+If shares are called away, go back to Phase 1
+If shares are not called away, continue selling covered calls
+
+Automatic Condition Settings
+Set these conditions in your brokerage platform for execution during the trading day:
+
+Morning Entry Orders (Set by 10:00 AM)
+
+Based on market analysis, place limit orders for selected options
+Set GTC (Good Till Canceled) with end date of current week
+
+
+Take Profit Orders
+
+Immediately after purchasing options, set limit orders at target profit percentages
+
+
+Stop Loss Orders
+
+Set stop market orders at specified loss percentages
+For straddles, set conditional orders based on combined position value
+
+
+Thursday Exit Orders
+
+Set automatic sell orders for Thursday afternoon to exit any remaining positions
+
+
+
+Weekly Schedule for 1-Hour Daily Management
+Monday:
+
+Perform market analysis
+Make weekly strategy decisions
+Place initial orders for options
+
+Tuesday-Wednesday:
+
+Monitor positions
+Adjust stop losses if needed
+Add to positions if appropriate based on market movement
+
+Thursday:
+
+Ensure all positions will be closed before Friday
+Evaluate week's performance
+Prepare for next week
+
+Friday:
+
+Avoid holding weekly options into expiration
+Use time to research and plan for following week
 
 PORTFOLIO SUMMARY:
 ${portfolioSummary}

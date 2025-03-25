@@ -1,12 +1,10 @@
-// app/(app)/index.tsx
+// app/(app)/index.tsx (Updated version to use combined portfolio)
 import React from "react";
-import { View } from "react-native";
-import { Stack } from "expo-router";
 import { useAppTheme } from "../../src/provider/ThemeProvider";
-import Dashboard from "../../src/screens/Portfolio/Dashboard";
+import CombinedPortfolioDashboard from "../../src/screens/Portfolio/CombinedPortfolioDashboard";
 
 export default function HomeRoute() {
   const { isDarkMode } = useAppTheme();
   
-  return <Dashboard />;
+  return <CombinedPortfolioDashboard />;
 }

@@ -15,6 +15,7 @@
     "@expo/vector-icons": "^14.0.2",
     "@polygon.io/client-js": "^7.4.0",
     "@react-native-async-storage/async-storage": "^1.21.0",
+    "@react-native-community/datetimepicker": "^8.3.0",
     "@supabase/supabase-js": "^2.39.3",
     "axios": "^1.6.7",
     "eventemitter3": "^5.0.1",

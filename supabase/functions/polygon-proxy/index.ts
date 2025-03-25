@@ -1,4 +1,3 @@
-// supabase/functions/polygon-proxy/index.js
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const POLYGON_API_KEY = Deno.env.get("POLYGON_API_KEY") || "";

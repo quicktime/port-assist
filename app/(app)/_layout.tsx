@@ -1,3 +1,4 @@
+// app/(app)/_layout.tsx (Updated version)
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { useAuth } from '../../src/hooks/useAuth';
@@ -38,9 +39,18 @@ export default function AppLayout() {
       <Tabs.Screen
         name="portfolio"
         options={{
-          title: "Portfolio",
+          title: "Stocks",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="chart-line" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="options-portfolio"
+        options={{
+          title: "Options",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="chart-timeline-variant" color={color} size={size} />
           ),
         }}
       />
