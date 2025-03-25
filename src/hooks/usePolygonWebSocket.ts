@@ -3,27 +3,35 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   polygonWebSocketService, 
   ConnectionState, 
-  StockUpdateEvent 
+  StockUpdateEvent,
+  SubscriptionPriority
 } from '../services/polygon';
 
 interface UsePolygonWebSocketProps {
   symbols?: string[];
+  priority?: SubscriptionPriority;
   enabled?: boolean;
+  refreshInterval?: number;
 }
 
 interface UsePolygonWebSocketResult {
   stockData: Record<string, { price: number; timestamp: number }>;
   connectionState: ConnectionState;
   isConnected: boolean;
-  subscribe: (symbol: string) => void;
+  subscribe: (symbol: string, priority?: SubscriptionPriority) => void;
   unsubscribe: (symbol: string) => void;
   connect: () => void;
   disconnect: () => void;
+  refreshData: () => void;
+  isLoading: boolean;
+  lastUpdated: Date | null;
 }
 
 export const usePolygonWebSocket = ({
   symbols = [],
-  enabled = true
+  priority = SubscriptionPriority.MEDIUM,
+  enabled = true,
+  refreshInterval = 0
 }: UsePolygonWebSocketProps = {}): UsePolygonWebSocketResult => {
   const [stockData, setStockData] = useState<Record<string, { price: number; timestamp: number }>>(
     polygonWebSocketService.getStockData()
@@ -31,6 +39,8 @@ export const usePolygonWebSocket = ({
   const [connectionState, setConnectionState] = useState<ConnectionState>(
     polygonWebSocketService.getConnectionState()
   );
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
   // Handle stock updates
   const handleStockUpdate = useCallback((update: StockUpdateEvent) => {
@@ -41,6 +51,8 @@ export const usePolygonWebSocket = ({
         timestamp: update.timestamp
       }
     }));
+    
+    setLastUpdated(new Date());
   }, []);
   
   // Handle connection state changes
@@ -48,10 +60,10 @@ export const usePolygonWebSocket = ({
     setConnectionState(state);
   }, []);
   
-  // Subscribe to a symbol
-  const subscribe = useCallback((symbol: string) => {
-    polygonWebSocketService.subscribe(symbol);
-  }, []);
+  // Subscribe to a symbol with a specific priority
+  const subscribe = useCallback((symbol: string, symbolPriority = priority) => {
+    polygonWebSocketService.subscribe(symbol, symbolPriority);
+  }, [priority]);
   
   // Unsubscribe from a symbol
   const unsubscribe = useCallback((symbol: string) => {
@@ -68,6 +80,29 @@ export const usePolygonWebSocket = ({
     polygonWebSocketService.disconnect();
   }, []);
   
+  // Force refresh data for the subscribed symbols
+  const refreshData = useCallback(() => {
+    setIsLoading(true);
+    
+    // Using a Promise.all to wait for all force refreshes
+    const symbolsToRefresh = symbols.length > 0 ? symbols : Object.keys(stockData);
+    
+    Promise.all(
+      symbolsToRefresh.map(symbol => {
+        // Force an immediate update for the symbol
+        polygonWebSocketService.forceUpdate(symbol);
+        
+        // Give it a little time to process
+        return new Promise(resolve => setTimeout(resolve, 100));
+      })
+    ).finally(() => {
+      // Update stockData with the latest data
+      setStockData(polygonWebSocketService.getStockData());
+      setLastUpdated(new Date());
+      setIsLoading(false);
+    });
+  }, [symbols, stockData]);
+  
   // Set up listeners and subscriptions on mount
   useEffect(() => {
     if (!enabled) return;
@@ -76,16 +111,24 @@ export const usePolygonWebSocket = ({
     polygonWebSocketService.on('stockUpdate', handleStockUpdate);
     polygonWebSocketService.on('connectionStateChange', handleConnectionStateChange);
     
-    // Subscribe to symbols if provided
+    // Subscribe to symbols if provided with the specified priority
     if (symbols.length > 0) {
       symbols.forEach(symbol => {
-        polygonWebSocketService.subscribe(symbol);
+        polygonWebSocketService.subscribe(symbol, priority);
       });
     }
     
     // Connect if not already connected
     if (polygonWebSocketService.getConnectionState() === ConnectionState.DISCONNECTED) {
       polygonWebSocketService.connect();
+    }
+    
+    // Set up refresh interval if specified
+    let refreshTimer: NodeJS.Timeout | null = null;
+    if (refreshInterval > 0) {
+      refreshTimer = setInterval(() => {
+        refreshData();
+      }, refreshInterval);
     }
     
     // Cleanup on unmount
@@ -99,8 +142,21 @@ export const usePolygonWebSocket = ({
           polygonWebSocketService.unsubscribe(symbol);
         });
       }
+      
+      // Clear refresh timer
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+      }
     };
-  }, [enabled, symbols, handleStockUpdate, handleConnectionStateChange]);
+  }, [
+    enabled, 
+    symbols, 
+    priority,
+    refreshInterval,
+    handleStockUpdate, 
+    handleConnectionStateChange,
+    refreshData
+  ]);
   
   // Boolean for easy connection checking
   const isConnected = connectionState === ConnectionState.CONNECTED;
@@ -112,6 +168,9 @@ export const usePolygonWebSocket = ({
     subscribe,
     unsubscribe,
     connect,
-    disconnect
+    disconnect,
+    refreshData,
+    isLoading,
+    lastUpdated
   };
 };

@@ -8,22 +8,50 @@ import {
   Market, 
   StockSearchResult 
 } from './types';
-import { polygonWebSocketService } from './webSocketService';
+import { polygonWebSocketService, SubscriptionPriority, makePolygonRequest } from './webSocketService';
 
 // Initialize the Polygon.io REST client
 const polygonRest = restClient(POLYGON_API_KEY);
 
 // Price cache to minimize API calls
+// We keep a separate cache from the WebSocket service to handle non-streaming data
 const priceCache: Record<string, {
   price: number;
   timestamp: number;
   expiresAt: number;
 }> = {};
 
-// Cache expiration time (5 minutes)
-const CACHE_EXPIRATION = 5 * 60 * 1000;
+// Cache expiration times (ms)
+const CACHE_CONFIG = {
+  DEFAULT_EXPIRATION: 5 * 60 * 1000,     // 5 minutes
+  COMPANY_DETAILS: 24 * 60 * 60 * 1000,  // 24 hours
+  HISTORICAL_DATA: 60 * 60 * 1000,       // 1 hour
+  OPTION_EXPIRATIONS: 60 * 60 * 1000,    // 1 hour
+  OPTION_CHAINS: 15 * 60 * 1000,         // 15 minutes
+  STOCK_DETAILS: 8 * 60 * 60 * 1000      // 8 hours
+};
 
-// Function to fetch market status
+// API request batching configuration
+const BATCH_CONFIG = {
+  MAX_SYMBOLS_PER_REQUEST: 50,   // Max symbols per API request
+  BATCH_WINDOW: 50,              // Time window for batching requests (ms)
+  MAX_CONCURRENT_REQUESTS: 5     // Maximum number of concurrent API requests
+};
+
+// Keep track of pending batched requests
+interface PendingBatchRequest {
+  timer: NodeJS.Timeout;
+  symbols: string[];
+  resolve: (result: Record<string, StockData>) => void;
+  reject: (error: any) => void;
+}
+
+// Track pending batch requests
+let pendingStockBatchRequest: PendingBatchRequest | null = null;
+
+/**
+ * Function to fetch market status
+ */
 export const fetchMarketStatus = async (): Promise<string> => {
   try {
     // Try getting status from WebSocket first
@@ -37,7 +65,7 @@ export const fetchMarketStatus = async (): Promise<string> => {
     // Otherwise fall back to REST API through proxy
     try {
       const endpoint = 'v1/marketstatus/now';
-      const data = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const data = await makePolygonRequest(endpoint);
       
       if (data && data.market === 'open') {
         return 'open';
@@ -59,32 +87,47 @@ export const fetchMarketStatus = async (): Promise<string> => {
   }
 };
 
-// Function to fetch current stock price
+/**
+ * Check if a WebSocket price is fresh enough to use
+ * @param timestamp WebSocket data timestamp
+ * @returns true if the data is fresh enough to use
+ */
+function isWebSocketDataFresh(timestamp: number): boolean {
+  const MAX_AGE = 2 * 60 * 1000; // 2 minutes
+  return (Date.now() - timestamp) < MAX_AGE;
+}
+
+/**
+ * Function to fetch current stock price with optimized WebSocket integration
+ */
 export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
   try {
     const symbolUpper = symbol.toUpperCase();
     
     // 1. First try: Check if we have real-time data from WebSocket
     if (polygonWebSocketService.getConnectionState(Market.STOCKS) === ConnectionState.CONNECTED) {
-      // Subscribe to updates if not already subscribed
-      polygonWebSocketService.subscribeStock(symbolUpper);
+      // Subscribe to updates with HIGH priority (portfolio item)
+      polygonWebSocketService.subscribeStock(symbolUpper, SubscriptionPriority.HIGH);
       
       // Try to get the current price from the WebSocket service
-      const realtimePrice = polygonWebSocketService.getStockPrice(symbolUpper);
+      const wsData = polygonWebSocketService.getStockData()[symbolUpper];
       
-      if (realtimePrice !== null) {
+      if (wsData && isWebSocketDataFresh(wsData.timestamp)) {
+        const realtimePrice = wsData.price;
+        
         // Update cache
         priceCache[symbolUpper] = {
           price: realtimePrice,
           timestamp: Date.now(),
-          expiresAt: Date.now() + CACHE_EXPIRATION
+          expiresAt: Date.now() + CACHE_CONFIG.DEFAULT_EXPIRATION
         };
         
-        // Create return object (with estimated previous close)
+        // Create return object
+        // We'll set some estimated values, actual data will be updated on next subscription update
         return {
           ticker: symbolUpper,
           currentPrice: realtimePrice,
-          previousClose: realtimePrice * 0.995, // Estimate, replace with actual data if needed
+          previousClose: realtimePrice * 0.995, // Estimate
           change: realtimePrice * 0.005,
           changePercent: 0.5
         };
@@ -94,15 +137,15 @@ export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
     // 2. Second try: Check cache
     const cachedData = priceCache[symbolUpper];
     if (cachedData && cachedData.expiresAt > Date.now()) {
-      // Subscribe for future updates if we're online
+      // Subscribe for future updates (if we're online) with HIGH priority
       if (polygonWebSocketService.getConnectionState() === ConnectionState.CONNECTED) {
-        polygonWebSocketService.subscribe(symbolUpper);
+        polygonWebSocketService.subscribe(symbolUpper, SubscriptionPriority.HIGH);
       }
       
       return {
         ticker: symbolUpper,
         currentPrice: cachedData.price,
-        previousClose: cachedData.price * 0.995, // Estimate, replace with actual data if needed
+        previousClose: cachedData.price * 0.995, // Estimate
         change: cachedData.price * 0.005,
         changePercent: 0.5
       };
@@ -116,7 +159,7 @@ export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
       try {
         // Call the proxy Edge Function
         const endpoint = `v2/aggs/ticker/${symbolUpper}/prev`;
-        const response = await polygonWebSocketService.makePolygonRequest(endpoint);
+        const response = await makePolygonRequest(endpoint);
         
         if (response.results && response.results.length > 0) {
           const result = response.results[0];
@@ -127,17 +170,17 @@ export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
           priceCache[symbolUpper] = {
             price: result.c ?? 0,
             timestamp: Date.now(),
-            expiresAt: Date.now() + CACHE_EXPIRATION
+            expiresAt: Date.now() + CACHE_CONFIG.DEFAULT_EXPIRATION
           };
 
-          // Subscribe to this symbol for future updates via WebSocket
+          // Subscribe to this symbol for future updates via WebSocket with HIGH priority
           if (polygonWebSocketService.getConnectionState() === ConnectionState.CONNECTED) {
-            polygonWebSocketService.subscribe(symbolUpper);
+            polygonWebSocketService.subscribe(symbolUpper, SubscriptionPriority.HIGH);
           } else if (polygonWebSocketService.getConnectionState() === ConnectionState.DISCONNECTED) {
             // Try to connect if disconnected
             polygonWebSocketService.connect();
             // Then subscribe
-            polygonWebSocketService.subscribe(symbolUpper);
+            polygonWebSocketService.subscribe(symbolUpper, SubscriptionPriority.HIGH);
           }
 
           return {
@@ -179,7 +222,7 @@ export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
         priceCache[symbolUpper] = {
           price: result.c ?? 0,
           timestamp: Date.now(),
-          expiresAt: Date.now() + CACHE_EXPIRATION
+          expiresAt: Date.now() + CACHE_CONFIG.DEFAULT_EXPIRATION
         };
 
         return {
@@ -214,50 +257,241 @@ export const fetchStockPrice = async (symbol: string): Promise<StockData> => {
   }
 };
 
-// Function to fetch prices for multiple stocks in a single batch
+/**
+ * Processes a batch of stock symbols to fetch prices
+ */
+const processBatchedStockPriceRequest = async (symbols: string[]): Promise<Record<string, StockData>> => {
+  if (!symbols || symbols.length === 0) {
+    return {};
+  }
+  
+  // Chunk the symbols into batches of MAX_SYMBOLS_PER_REQUEST
+  const chunks: string[][] = [];
+  for (let i = 0; i < symbols.length; i += BATCH_CONFIG.MAX_SYMBOLS_PER_REQUEST) {
+    chunks.push(symbols.slice(i, i + BATCH_CONFIG.MAX_SYMBOLS_PER_REQUEST));
+  }
+  
+  // Process each chunk in parallel
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      // First get any prices available from WebSocket
+      const wsResults = getWebSocketPrices(chunk);
+      
+      // Determine which symbols need to be fetched from the API
+      const symbolsToFetch = chunk.filter(symbol => !wsResults[symbol]);
+      
+      if (symbolsToFetch.length === 0) {
+        return wsResults;
+      }
+      
+      try {
+        // Call the API for the remaining symbols
+        const apiResults = await fetchStockPricesFromAPI(symbolsToFetch);
+        
+        // Merge WebSocket and API results
+        return { ...wsResults, ...apiResults };
+      } catch (error) {
+        console.error(`Error fetching stock prices for chunk: ${chunk.join(',')}`, error);
+        return wsResults; // Return whatever we got from WebSocket
+      }
+    })
+  );
+  
+  // Merge all results from different chunks
+  return results.reduce((merged, result) => ({ ...merged, ...result }), {});
+};
+
+/**
+ * Get prices from WebSocket for a batch of symbols
+ */
+const getWebSocketPrices = (symbols: string[]): Record<string, StockData> => {
+  const stockDataCache = polygonWebSocketService.getStockData();
+  const results: Record<string, StockData> = {};
+  
+  symbols.forEach(symbol => {
+    const symbolUpper = symbol.toUpperCase();
+    const wsData = stockDataCache[symbolUpper];
+    
+    // Only use WebSocket data if it's fresh
+    if (wsData && isWebSocketDataFresh(wsData.timestamp)) {
+      const price = wsData.price;
+      
+      // We don't have all the data from WebSocket, so we'll create a stock data object
+      // with some estimated values. This is fine for the portfolio view.
+      results[symbolUpper] = {
+        ticker: symbolUpper,
+        currentPrice: price,
+        previousClose: price * 0.995, // Estimate
+        change: price * 0.005,
+        changePercent: 0.5
+      };
+    }
+  });
+  
+  return results;
+};
+
+/**
+ * Fetch stock prices from API
+ */
+const fetchStockPricesFromAPI = async (symbols: string[]): Promise<Record<string, StockData>> => {
+  if (symbols.length === 0) return {};
+  
+  try {
+    // Format the symbols for the API request
+    const tickersParam = symbols.join(',');
+    
+    // Call the API through the proxy
+    const endpoint = `v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickersParam}`;
+    const response = await makePolygonRequest(endpoint);
+    
+    const results: Record<string, StockData> = {};
+    
+    if (response.tickers) {
+      response.tickers.forEach((ticker: any) => {
+        const symbol = ticker.ticker;
+        const dayData = ticker.day || {};
+        const prevDayData = ticker.prevDay || {};
+        
+        const currentPrice = dayData.c || prevDayData.c || 0;
+        const previousClose = prevDayData.c || 0;
+        const change = currentPrice - previousClose;
+        const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+        
+        // Update cache
+        priceCache[symbol] = {
+          price: currentPrice,
+          timestamp: Date.now(),
+          expiresAt: Date.now() + CACHE_CONFIG.DEFAULT_EXPIRATION
+        };
+        
+        results[symbol] = {
+          ticker: symbol,
+          currentPrice,
+          previousClose,
+          change,
+          changePercent
+        };
+      });
+    }
+    
+    return results;
+  } catch (error) {
+    console.error(`Error fetching stock prices from API for: ${symbols.join(',')}`, error);
+    
+    // Fall back to direct client if proxy fails
+    try {
+      // We'll need to fetch each symbol individually
+      const individualResults = await Promise.all(
+        symbols.map(async (symbol) => {
+          try {
+            const data = await fetchStockPrice(symbol);
+            return { symbol, data };
+          } catch (e) {
+            return { symbol, data: null };
+          }
+        })
+      );
+      
+      // Convert array to object
+      const results: Record<string, StockData> = {};
+      individualResults.forEach(item => {
+        if (item.data) {
+          results[item.symbol] = item.data;
+        }
+      });
+      
+      return results;
+    } catch (directError) {
+      console.error(`Error fetching stock prices directly for: ${symbols.join(',')}`, directError);
+      return {};
+    }
+  }
+};
+
+/**
+ * Function to batch fetch stock prices with smart batching
+ */
 export const fetchStockPrices = async (symbols: string[]): Promise<Record<string, StockData>> => {
   if (!symbols || symbols.length === 0) {
     return {};
   }
   
-  // Ensure symbols are uppercase
-  const upperSymbols = symbols.map(s => s.toUpperCase());
+  // Ensure symbols are uppercase and unique
+  const upperSymbols = [...new Set(symbols.map(s => s.toUpperCase()))];
   
   // Subscribe all symbols to WebSocket for future updates
   if (polygonWebSocketService.getConnectionState(Market.STOCKS) === ConnectionState.CONNECTED) {
-    upperSymbols.forEach(symbol => polygonWebSocketService.subscribeStock(symbol));
+    upperSymbols.forEach(symbol => 
+      polygonWebSocketService.subscribeStock(symbol, SubscriptionPriority.HIGH));
   } else if (polygonWebSocketService.getConnectionState(Market.STOCKS) === ConnectionState.DISCONNECTED) {
     // Try to connect if disconnected
     polygonWebSocketService.connect(Market.STOCKS);
-    upperSymbols.forEach(symbol => polygonWebSocketService.subscribeStock(symbol));
+    upperSymbols.forEach(symbol => 
+      polygonWebSocketService.subscribeStock(symbol, SubscriptionPriority.HIGH));
   }
   
-  // Execute all fetch operations in parallel with fallback strategies
-  const results = await Promise.all(
-    upperSymbols.map(async (symbol) => {
-      try {
-        const data = await fetchStockPrice(symbol);
-        return { symbol, data, error: null };
-      } catch (error) {
-        console.error(`Error fetching data for ${symbol}:`, error);
-        return { symbol, data: null, error };
-      }
-    })
-  );
+  // Check if a batch is already in progress
+  if (pendingStockBatchRequest) {
+    // Add our symbols to the existing batch
+    pendingStockBatchRequest.symbols = [
+      ...new Set([...pendingStockBatchRequest.symbols, ...upperSymbols])
+    ];
+    
+    // Create and return a promise that will be resolved when the batch is processed
+    return new Promise((resolve, reject) => {
+      const originalResolve = pendingStockBatchRequest!.resolve;
+      
+      // Override the resolve function to filter results for our symbols
+      pendingStockBatchRequest!.resolve = (results) => {
+        originalResolve(results);
+        
+        // Filter results for our symbols only
+        const filteredResults: Record<string, StockData> = {};
+        upperSymbols.forEach(symbol => {
+          if (results[symbol]) {
+            filteredResults[symbol] = results[symbol];
+          }
+        });
+        
+        resolve(filteredResults);
+      };
+      
+      pendingStockBatchRequest!.reject = (error) => {
+        reject(error);
+      };
+    });
+  }
   
-  // Convert array of results to object keyed by symbol
-  const stockDataMap: Record<string, StockData> = {};
-  
-  results.forEach(result => {
-    if (result.data) {
-      stockDataMap[result.symbol] = result.data;
-    }
+  // Create a new batch request
+  return new Promise((resolve, reject) => {
+    pendingStockBatchRequest = {
+      symbols: upperSymbols,
+      resolve,
+      reject,
+      timer: setTimeout(async () => {
+        const symbolsToProcess = [...pendingStockBatchRequest!.symbols];
+        const resolveFunction = pendingStockBatchRequest!.resolve;
+        const rejectFunction = pendingStockBatchRequest!.reject;
+        
+        // Clear the pending batch
+        pendingStockBatchRequest = null;
+        
+        try {
+          const results = await processBatchedStockPriceRequest(symbolsToProcess);
+          resolveFunction(results);
+        } catch (error) {
+          console.error('Error processing batched stock price request:', error);
+          rejectFunction(error);
+        }
+      }, BATCH_CONFIG.BATCH_WINDOW)
+    };
   });
-  
-  return stockDataMap;
 };
 
-// Function to batch update portfolio items with current prices
+/**
+ * Function to batch update portfolio items with current prices
+ */
 export const batchUpdatePortfolioPrices = async (portfolioItems: any[]): Promise<any[]> => {
   if (!portfolioItems || portfolioItems.length === 0) {
     return [];
@@ -278,7 +512,7 @@ export const batchUpdatePortfolioPrices = async (portfolioItems: any[]): Promise
       const value = currentPrice * item.shares;
       const cost_basis = item.avg_price * item.shares;
       const profit_loss = value - cost_basis;
-      const profit_loss_percent = (profit_loss / cost_basis) * 100;
+      const profit_loss_percent = cost_basis > 0 ? (profit_loss / cost_basis) * 100 : 0;
       
       return {
         ...item,
@@ -294,7 +528,9 @@ export const batchUpdatePortfolioPrices = async (portfolioItems: any[]): Promise
   });
 };
 
-// Function to batch update options with current prices
+/**
+ * Function to batch update options with current prices
+ */
 export const batchUpdateOptionPrices = async (optionItems: any[]): Promise<any[]> => {
   if (!optionItems || optionItems.length === 0) {
     return [];
@@ -314,10 +550,10 @@ export const batchUpdateOptionPrices = async (optionItems: any[]): Promise<any[]
         optionSymbol = `O:${optionSymbol}`;
       }
       
-      // Subscribe to this option for real-time updates
-      polygonWebSocketService.subscribeOption(optionSymbol);
+      // Subscribe to this option for real-time updates with appropriate priority
+      polygonWebSocketService.subscribeOption(optionSymbol, SubscriptionPriority.LOW);
       
-      // Get current price
+      // Get current price from WebSocket first
       const currentPrice = polygonWebSocketService.getOptionPrice(optionSymbol);
       
       if (currentPrice !== null) {
@@ -325,6 +561,31 @@ export const batchUpdateOptionPrices = async (optionItems: any[]): Promise<any[]
           ...item,
           current_price: currentPrice
         };
+      }
+      
+      // Fall back to API if WebSocket data is not available
+      try {
+        // Extract underlying symbol
+        const match = optionSymbol.match(/^O:([A-Z]+)/);
+        const underlyingSymbol = match ? match[1] : '';
+        
+        if (!underlyingSymbol) {
+          console.error(`Invalid option symbol format: ${optionSymbol}`);
+          return item;
+        }
+        
+        // Use the snapshot API to get current price
+        const endpoint = `v3/snapshot/options/${underlyingSymbol}/${optionSymbol}`;
+        const response = await makePolygonRequest(endpoint);
+        
+        if (response.results && response.results.day) {
+          return {
+            ...item,
+            current_price: response.results.day.close || item.current_price || 0
+          };
+        }
+      } catch (apiError) {
+        console.error(`Error fetching option details via API for ${optionSymbol}:`, apiError);
       }
       
       return item;
@@ -337,7 +598,9 @@ export const batchUpdateOptionPrices = async (optionItems: any[]): Promise<any[]
   return updatedOptions;
 };
 
-// Function to fetch options data for a specific symbol
+/**
+ * Function to fetch options data for a specific symbol
+ */
 export const fetchOptionsData = async (
   underlyingSymbol: string,
   expirationDate?: string
@@ -357,11 +620,16 @@ export const fetchOptionsData = async (
     try {
       // First try using the Edge Function proxy
       const endpoint = `v3/reference/options/contracts?underlying_ticker=${underlyingSymbol}&expiration_date=${expDate}&limit=100`;
-      const response = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const response = await makePolygonRequest(endpoint);
       
       console.log(`Fetched ${(response.results || []).length} options for ${underlyingSymbol} expiring on ${expDate}`);
 
       if (response.results && response.results.length > 0) {
+        // Subscribe to these options for future updates (throttled)
+        response.results.forEach((option: any) => {
+          polygonWebSocketService.subscribeOption(option.ticker, SubscriptionPriority.LOW);
+        });
+        
         // Map API response to our OptionData interface
         return Promise.all(
           response.results.map(async (option: any) => {
@@ -405,6 +673,11 @@ export const fetchOptionsData = async (
     console.log(`Fetched ${(response.results ?? []).length} options for ${underlyingSymbol} expiring on ${expDate}`);
 
     if (response.results && response.results.length > 0) {
+      // Subscribe to these options for future updates (throttled)
+      response.results.forEach((option: any) => {
+        polygonWebSocketService.subscribeOption(option.ticker, SubscriptionPriority.LOW);
+      });
+      
       // Map API response to our OptionData interface
       return Promise.all(
         response.results.map(async (option: any) => {
@@ -441,15 +714,34 @@ export const fetchOptionsData = async (
   }
 };
 
-// Function to fetch available expiration dates for options
+/**
+ * Function to fetch available expiration dates for options
+ */
 export const fetchOptionsExpirations = async (
   underlyingSymbol: string
 ): Promise<string[]> => {
   try {
+    // Check cache first
+    const cacheKey = `${underlyingSymbol}_expirations`;
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (cachedData) {
+      try {
+        const { expirations, timestamp } = JSON.parse(cachedData);
+        
+        // If cache is still valid, use it
+        if ((Date.now() - timestamp) < CACHE_CONFIG.OPTION_EXPIRATIONS) {
+          return expirations;
+        }
+      } catch (e) {
+        // Ignore cache parse errors
+      }
+    }
+    
     // Try using the Edge Function proxy first
     try {
       const endpoint = `v3/reference/options/contracts?underlying_ticker=${underlyingSymbol}`;
-      const response = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const response = await makePolygonRequest(endpoint);
       
       if (response.results) {
         // Extract and sort the expiration dates
@@ -459,7 +751,13 @@ export const fetchOptionsExpirations = async (
             self.indexOf(date) === index  // Remove duplicates
           )
           .sort();
-          
+        
+        // Cache the results
+        localStorage.setItem(cacheKey, JSON.stringify({
+          expirations: dates,
+          timestamp: Date.now()
+        }));
+        
         return dates;
       }
     } catch (proxyError) {
@@ -472,12 +770,20 @@ export const fetchOptionsExpirations = async (
       .then(response => {
         if (response.results) {
           // Extract and sort the expiration dates
-          return response.results
+          const dates = response.results
             .map((contract: any) => contract.expiration_date)
             .filter((date: string, index: number, self: string[]) => 
               self.indexOf(date) === index  // Remove duplicates
             )
             .sort();
+          
+          // Cache the results
+          localStorage.setItem(cacheKey, JSON.stringify({
+            expirations: dates,
+            timestamp: Date.now()
+          }));
+          
+          return dates;
         }
         return [];
       });
@@ -487,7 +793,9 @@ export const fetchOptionsExpirations = async (
   }
 };
 
-// Function to fetch option details with WebSocket integration
+/**
+ * Function to fetch option details with WebSocket integration
+ */
 const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
   try {
     // For options, we need to make sure it has the O: prefix
@@ -510,15 +818,16 @@ const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
     }
     
     // Subscribe to this option for future updates
-    polygonWebSocketService.subscribeOption(formattedSymbol);
+    polygonWebSocketService.subscribeOption(formattedSymbol, SubscriptionPriority.LOW);
     
     // Step 2: Try to get last price from WebSocket cache first
-    const lastPriceFromWS = polygonWebSocketService.getOptionPrice(formattedSymbol);
+    const wsData = polygonWebSocketService.getOptionData()[formattedSymbol];
+    const lastPriceFromWS = wsData && isWebSocketDataFresh(wsData.timestamp) ? wsData.price : null;
     
     // Step 3: Try to fetch snapshot using Edge Function proxy
     try {
       const endpoint = `v3/snapshot/options/${underlyingAsset}/${formattedSymbol}`;
-      const snapshotResponse = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const snapshotResponse = await makePolygonRequest(endpoint);
       
       // Extract data from snapshot response
       const snapshot = snapshotResponse.results;
@@ -585,7 +894,7 @@ const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
       console.error(`Error fetching option details for ${optionSymbol}:`, error);
       // Return default values if there's an error
       return {
-        lastPrice: 0,
+        lastPrice: lastPriceFromWS || 0,
         bidPrice: 0,
         askPrice: 0,
         openInterest: 0,
@@ -619,21 +928,49 @@ const fetchOptionDetails = async (optionSymbol: string): Promise<any> => {
   }
 };
 
+/**
+ * Function to fetch company details
+ */
 export const fetchCompanyDetails = async (symbol: string): Promise<any> => {
   try {
+    // Check cache first
+    const cacheKey = `company_${symbol.toUpperCase()}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (cachedData) {
+      try {
+        const { details, timestamp } = JSON.parse(cachedData);
+        
+        // If cache is still valid, use it
+        if ((Date.now() - timestamp) < CACHE_CONFIG.COMPANY_DETAILS) {
+          return details;
+        }
+      } catch (e) {
+        // Ignore cache parse errors
+      }
+    }
+    
     // Try using the Edge Function proxy first
     try {
       const endpoint = `v3/reference/tickers/${symbol.toUpperCase()}`;
-      const response = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const response = await makePolygonRequest(endpoint);
       
       if (response.results) {
-        return {
+        const details = {
           ticker: response.results?.ticker,
           name: response.results?.name,
           sector: response.results?.sic_description,
           marketCap: response.results?.market_cap,
           description: response.results?.description
         };
+        
+        // Cache the results
+        localStorage.setItem(cacheKey, JSON.stringify({
+          details,
+          timestamp: Date.now()
+        }));
+        
+        return details;
       }
     } catch (proxyError) {
       console.error(`Error fetching company details via proxy for ${symbol}:`, proxyError);
@@ -642,19 +979,30 @@ export const fetchCompanyDetails = async (symbol: string): Promise<any> => {
     
     // Fall back to direct client
     const details = (await polygonRest.reference.tickerDetails(symbol.toUpperCase())).results;
-    return {
+    const formattedDetails = {
       ticker: details?.ticker,
       name: details?.name,
       sector: details?.sic_description,
       marketCap: details?.market_cap,
       description: details?.description
     };
+    
+    // Cache the results
+    localStorage.setItem(cacheKey, JSON.stringify({
+      details: formattedDetails,
+      timestamp: Date.now()
+    }));
+    
+    return formattedDetails;
   } catch (error) {
     console.error(`Error fetching company details for ${symbol}:`, error);
     throw error;
   }
 };
 
+/**
+ * Function to fetch historical prices
+ */
 export const fetchHistoricalPrices = async (
   symbol: string, 
   from: string, 
@@ -670,13 +1018,30 @@ export const fetchHistoricalPrices = async (
   volume: number;
 }[]> => {
   try {
+    // Generate cache key
+    const cacheKey = `historical_${symbol}_${from}_${to}_${timespan}_${multiplier}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (cachedData) {
+      try {
+        const { data, timestamp } = JSON.parse(cachedData);
+        
+        // If cache is still valid, use it
+        if ((Date.now() - timestamp) < CACHE_CONFIG.HISTORICAL_DATA) {
+          return data;
+        }
+      } catch (e) {
+        // Ignore cache parse errors
+      }
+    }
+    
     // Try using the Edge Function proxy first
     try {
       const endpoint = `v2/aggs/ticker/${symbol.toUpperCase()}/range/${multiplier}/${timespan}/${from}/${to}`;
-      const response = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const response = await makePolygonRequest(endpoint);
       
       if (response.results) {
-        return (response.results ?? []).map((result: any) => ({
+        const formattedData = (response.results ?? []).map((result: any) => ({
           date: new Date(result.t).toISOString().split('T')[0],
           open: result.o,
           high: result.h,
@@ -684,6 +1049,14 @@ export const fetchHistoricalPrices = async (
           close: result.c,
           volume: result.v
         }));
+        
+        // Cache the results
+        localStorage.setItem(cacheKey, JSON.stringify({
+          data: formattedData,
+          timestamp: Date.now()
+        }));
+        
+        return formattedData;
       }
     } catch (proxyError) {
       console.error(`Error fetching historical prices via proxy for ${symbol}:`, proxyError);
@@ -699,7 +1072,7 @@ export const fetchHistoricalPrices = async (
       to
     )).results;
 
-    return (results ?? []).map((result: any) => ({
+    const formattedData = (results ?? []).map((result: any) => ({
       date: new Date(result.t).toISOString().split('T')[0],
       open: result.o,
       high: result.h,
@@ -707,18 +1080,29 @@ export const fetchHistoricalPrices = async (
       close: result.c,
       volume: result.v
     }));
+    
+    // Cache the results
+    localStorage.setItem(cacheKey, JSON.stringify({
+      data: formattedData,
+      timestamp: Date.now()
+    }));
+    
+    return formattedData;
   } catch (error) {
     console.error(`Error fetching historical prices for ${symbol}:`, error);
     throw error;
   }
 };
 
+/**
+ * Function to search for stocks
+ */
 export const searchStocks = async (query: string): Promise<StockSearchResult[]> => {
   try {
     // Try using the Edge Function proxy first
     try {
       const endpoint = `v3/reference/tickers?search=${encodeURIComponent(query)}`;
-      const response = await polygonWebSocketService.makePolygonRequest(endpoint);
+      const response = await makePolygonRequest(endpoint);
       
       if (response.results) {
         return (response.results ?? []).map((result: any) => ({
@@ -754,12 +1138,41 @@ export const searchStocks = async (query: string): Promise<StockSearchResult[]> 
   }
 };
 
+/**
+ * Function to get stock suggestions
+ */
 export const getStockSuggestions = async (
   query: string, 
   limit: number = 5
 ): Promise<StockSearchResult[]> => {
   try {
+    // Generate cache key
+    const cacheKey = `suggestions_${query}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (cachedData && query.length > 1) {
+      try {
+        const { results, timestamp } = JSON.parse(cachedData);
+        
+        // Cache suggestions for 1 hour
+        if ((Date.now() - timestamp) < 60 * 60 * 1000) {
+          return results.slice(0, limit);
+        }
+      } catch (e) {
+        // Ignore cache parse errors
+      }
+    }
+    
     const results = await searchStocks(query);
+    
+    // Cache results for future queries
+    if (query.length > 1) {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        results,
+        timestamp: Date.now()
+      }));
+    }
+    
     return results.slice(0, limit);
   } catch (error) {
     console.error(`Error getting stock suggestions for ${query}:`, error);
