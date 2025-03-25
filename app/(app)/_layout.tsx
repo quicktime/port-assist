@@ -87,6 +87,12 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="options-chain"
+        options={{
+          href: null, // Prevents the tab from appearing in the tab bar
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           href: null, // Prevents the tab from appearing in the tab bar

@@ -1,6 +1,6 @@
 // app/(app)/options/_layout.tsx
 import React from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useAppTheme } from '../../../src/provider/ThemeProvider';
 
 export default function OptionsLayout() {
@@ -44,9 +44,12 @@ export default function OptionsLayout() {
       />
       <Stack.Screen
         name="chain/[symbol]"
-        options={({ route }) => ({
-          title: `Options Chain: ${route.params?.symbol || ''}`,
-        })}
+        options={() => {
+          const { symbol } = useLocalSearchParams<{ symbol: string }>();
+          return {
+            title: `Options Chain: ${symbol || ''}`,
+          };
+        }}
       />
     </Stack>
   );

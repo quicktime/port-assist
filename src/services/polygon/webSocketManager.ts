@@ -4,6 +4,7 @@ import EventEmitter from 'eventemitter3';
 import { websocketClient } from '@polygon.io/client-js';
 import { ConnectionState, Market, StockUpdateEvent, OptionUpdateEvent } from './types';
 import { AppState, AppStateStatus, Platform } from 'react-native';
+import { SUPABASE_URL } from '@env';
 
 // Subscription throttling configuration
 interface ThrottleConfig {
@@ -1142,6 +1143,59 @@ class PolygonWebSocketManager {
     
     // Remove all event listeners
     this.eventEmitter.removeAllListeners();
+  }
+  
+  /**
+   * Make a REST API call to Polygon.io through the proxy Edge Function
+   */
+  public async makePolygonRequest(endpoint: string, method: 'GET' | 'POST' = 'GET', body?: any): Promise<any> {
+    try {
+      const baseUrl = 'https://api.polygon.io/';
+      const apiKey = POLYGON_API_KEY;
+      
+      // First try using the Edge Function
+      try {
+        // Call through Supabase Edge Function
+        const polygonProxyUrl = `${SUPABASE_URL}/functions/v1/polygon-proxy`;
+        
+        const response = await fetch(`${polygonProxyUrl}?endpoint=${encodeURIComponent(endpoint)}`, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: body ? JSON.stringify(body) : undefined
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Polygon proxy returned ${response.status}: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (proxyError) {
+        console.error('Polygon proxy error:', proxyError);
+        console.log('Falling back to direct API call');
+        
+        // Fall back to direct API call
+        const url = `${baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
+        
+        const directResponse = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: body ? JSON.stringify(body) : undefined
+        });
+        
+        if (!directResponse.ok) {
+          throw new Error(`Polygon API returned ${directResponse.status}: ${directResponse.statusText}`);
+        }
+        
+        return await directResponse.json();
+      }
+    } catch (error) {
+      console.error('Error making Polygon request:', error);
+      throw error;
+    }
   }
   
   /**
