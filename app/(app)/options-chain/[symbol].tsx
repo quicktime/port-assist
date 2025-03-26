@@ -1,7 +1,10 @@
 // app/(app)/options-chain/[symbol].tsx
 import React from "react";
-import { ChainOptionScreen } from "../../../src/screens";
+import { useLocalSearchParams } from "expo-router";
+import OptionsChainScreen from "../../../src/screens/Options/ChainScreen";
 
 export default function OptionsChainRoute() {
-  return <ChainOptionScreen />;
+  const { symbol } = useLocalSearchParams<{ symbol: string }>();
+  
+  return <OptionsChainScreen symbol={symbol} />;
 }

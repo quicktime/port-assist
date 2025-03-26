@@ -38,7 +38,7 @@ export default function PortfolioLayout() {
       />
       <Stack.Screen
         name="company/[symbol]"
-        options={({ route }) => ({
+        options={({ route }: { route: any }) => ({
           title: `Company Details: ${route.params?.symbol || ''}`,
         })}
       />

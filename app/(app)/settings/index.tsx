@@ -11,7 +11,7 @@ export default function SettingsIndex() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <TouchableOpacity 
-        style={[styles.setting, { borderBottomColor: theme.colors.border }]}
+        style={[styles.setting, { borderBottomColor: '#E0E0E0' }]}
         onPress={() => router.push('/settings/websocket')}
       >
         <MaterialCommunityIcons name="access-point-network" size={24} color={theme.colors.primary} />

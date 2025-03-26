@@ -24,11 +24,13 @@ import { commonStyles } from "../styles/common";
 /**
  * Screen for displaying the options chain for a specific underlying symbol
  */
-export default function ChainScreen() {
-  const params = useLocalSearchParams();
+type ChainScreenProps = {
+  symbol: string;
+};
+
+export default function ChainScreen({ symbol }: ChainScreenProps) {
   const paperTheme = useTheme();
   const { subscribe, unsubscribe, isConnected } = usePolygonWebSocket();
-  const symbol = params.symbol as string;
   
   const [stockPrice, setStockPrice] = useState<number | null>(null);
   const [optionType, setOptionType] = useState<'call' | 'put'>('call');
