@@ -481,8 +481,8 @@ export default function IndexScreen() {
               
               <View style={styles.allocationRow}>
                 <View style={styles.allocationItem}>
-                  <Text variant="titleMedium">${summary.stocksValue.toFixed(2)}</Text>
                   <Text variant="bodyMedium">Stocks</Text>
+                  <Text variant="titleMedium">${summary.stocksValue.toFixed(2)}</Text>
                   <Text
                     variant="bodySmall"
                     style={{
@@ -493,12 +493,12 @@ export default function IndexScreen() {
                   </Text>
                 </View>
                 <View style={styles.allocationItem}>
-                  <Text variant="titleMedium">${summary.cashBalance.toFixed(2)}</Text>
                   <Text variant="bodyMedium">Cash</Text>
+                  <Text variant="titleMedium">${summary.cashBalance.toFixed(2)}</Text>
                 </View>
                 <View style={styles.allocationItem}>
-                  <Text variant="titleMedium">${summary.optionsValue.toFixed(2)}</Text>
                   <Text variant="bodyMedium">Options</Text>
+                  <Text variant="titleMedium">${summary.optionsValue.toFixed(2)}</Text>
                   <Text
                     variant="bodySmall"
                     style={{

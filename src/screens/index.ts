@@ -11,12 +11,12 @@ export { default as ForgetPasswordScreen } from './auth/ForgetPasswordScreen';
 // Home screen
 export { default as HomeScreen } from './Home';
 
-// Portfolio screens
-export { default as PortfolioScreen } from './Portfolio/PortfolioScreen';
-export { default as AddPortfolioScreen } from './Portfolio/AddScreen';
-export { default as EditPortfolioScreen } from './Portfolio/EditScreen';
-export { default as CashScreen } from './Portfolio/CashScreen';
-export { default as CompanyScreen } from './Portfolio/CompanyScreen';
+// Stocks screens
+export { default as StocksPositionsScreen } from './Stocks/PositionsScreen';
+export { default as AddPortfolioScreen } from './Stocks/AddScreen';
+export { default as EditPortfolioScreen } from './Stocks/EditScreen';
+export { default as CashScreen } from './Stocks/CashScreen';
+export { default as CompanyScreen } from './Stocks/CompanyScreen';
 
 // Profile screens
 export { default as ProfileScreen } from './Profile';
@@ -29,7 +29,7 @@ export { default as AddOptionScreen } from './Options/AddScreen';
 export { default as EditOptionScreen } from './Options/EditScreen';
 export { default as DetailOptionScreen } from './Options/DetailScreen';
 export { default as ChainOptionScreen } from './Options/ChainScreen';
-export { default as PortfolioOptionScreen } from './Options/PortfolioScreen';
+export { default as OptionsPositionsScreen } from './Options/PositionsScreen';
 
 // Dashboard screens
 export { default as IndexScreen } from './Dashboard/IndexScreen';

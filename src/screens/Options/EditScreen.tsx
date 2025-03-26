@@ -11,7 +11,7 @@ import {
 } from "react-native-paper";
 import { supabase } from "../../initSupabase";
 import { router, useLocalSearchParams } from "expo-router";
-import { OptionPosition } from "../Portfolio/OptionsPortfolioScreen";
+import { OptionPosition } from "./PositionsScreen";
 import { BaseScreen, LoadingScreen } from "../";
 import { commonStyles, formStyles } from "../styles/common";
 

@@ -18,7 +18,7 @@ import { supabase } from "../../initSupabase";
 import { router } from "expo-router";
 import { searchStocks, fetchOptionsData, OptionData } from "../../services/polygon";
 import { debounce } from 'lodash';
-import { OptionPosition } from "../Portfolio/OptionsPortfolioScreen";
+import { OptionPosition } from "./PositionsScreen";
 import { BaseScreen } from "../";
 import { commonStyles, formStyles } from "../styles/common";
 

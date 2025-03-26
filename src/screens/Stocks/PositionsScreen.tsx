@@ -15,7 +15,7 @@ import { commonStyles, cardStyles } from '../styles/common';
 /**
  * Portfolio screen showing list of stocks and portfolio summary
  */
-const PortfolioScreen = () => {
+const PositionsScreen = () => {
   const paperTheme = useTheme();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [summary, setSummary] = useState({
@@ -314,4 +314,4 @@ const PortfolioScreen = () => {
   );
 };
 
-export default PortfolioScreen;
+export default PositionsScreen;

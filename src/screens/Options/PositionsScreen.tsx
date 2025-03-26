@@ -17,7 +17,7 @@ import { router } from "expo-router";
 import { supabase } from "../../api/supabase";
 import { batchUpdateOptionPrices } from "../../services/polygon";
 import { usePolygonWebSocket } from "../../hooks/usePolygonWebSocket";
-import { BaseScreen, EmptyState } from "../";
+import { BaseScreen, EmptyState } from "..";
 import { commonStyles } from "../styles/common";
 
 export interface OptionPosition {
@@ -45,7 +45,7 @@ export interface OptionPosition {
 /**
  * Screen for managing the user's option positions portfolio
  */
-export default function PortfolioScreen() {
+export default function OptionsPositionsScreen() {
   const paperTheme = useTheme();
   const { isConnected } = usePolygonWebSocket();
   
