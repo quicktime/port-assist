@@ -1,8 +1,6 @@
-// src/screens/Settings/WebSocketConfigScreen.tsx
-import React, { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, Alert } from "react-native";
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, StyleSheet, Alert } from 'react-native';
 import {
-  Appbar,
   Text,
   Card,
   Switch,
@@ -13,13 +11,13 @@ import {
   Portal,
   RadioButton,
   useTheme
-} from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAppTheme } from "../../provider/ThemeProvider";
-import { polygonWebSocketService, ConnectionState } from "../../services/polygon";
-import WebSocketStatus from "../../components/WebSocketStatus";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
+} from 'react-native-paper';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { polygonWebSocketService, ConnectionState } from '../../services/polygon';
+import WebSocketStatus from '../../components/WebSocketStatus';
+import BaseScreen from '../components/BaseScreen';
+import { commonStyles } from '../styles/common';
 
 // Connection strategies
 enum ConnectionStrategy {
@@ -28,8 +26,7 @@ enum ConnectionStrategy {
   PORTFOLIO_ONLY = 'portfolio_only',
 }
 
-const WebSocketConfigScreen = () => {
-  const { isDarkMode, toggleTheme } = useAppTheme();
+const WebSocketScreen = () => {
   const theme = useTheme();
   
   // Settings state
@@ -113,30 +110,25 @@ const WebSocketConfigScreen = () => {
       
       // Show confirmation
       Alert.alert(
-        "Subscriptions Cleared",
+        'Subscriptions Cleared',
         `Unsubscribed from ${subscriptions.length} symbols.`
       );
     } catch (error) {
-      console.error("Error clearing subscriptions:", error);
+      console.error('Error clearing subscriptions:', error);
       Alert.alert(
-        "Error",
-        "Failed to clear subscriptions. Please try again."
+        'Error',
+        'Failed to clear subscriptions. Please try again.'
       );
     }
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="WebSocket Configuration" />
-        <Appbar.Action 
-          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"} 
-          onPress={toggleTheme} 
-        />
-      </Appbar.Header>
-      
-      <ScrollView style={styles.scrollView}>
+    <BaseScreen 
+      title="WebSocket Configuration" 
+      showBackButton={true}
+      onBack={() => router.back()}
+    >
+      <ScrollView style={commonStyles.content}>
         <WebSocketStatus showDetails={true} />
         
         <Card style={styles.card}>
@@ -275,7 +267,7 @@ const WebSocketConfigScreen = () => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </SafeAreaView>
+    </BaseScreen>
   );
 };
 
@@ -294,13 +286,6 @@ const getStrategyDescription = (strategy: ConnectionStrategy): string => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-    padding: 16,
-  },
   card: {
     marginBottom: 16,
     borderRadius: 8,
@@ -317,4 +302,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WebSocketConfigScreen;
+export default WebSocketScreen;

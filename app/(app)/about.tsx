@@ -3,7 +3,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Stack } from "expo-router";
 import { useAppTheme } from "../../src/provider/ThemeProvider";
-import About from "../../src/screens/About";
+import { AboutScreen } from "../../src/screens";
 
 export default function AboutRoute() {
   const { theme } = useAppTheme();
@@ -16,8 +16,9 @@ export default function AboutRoute() {
           backgroundColor: theme.colors.background,
         },
         headerTintColor: theme.colors.text,
+        headerShown: false, // Hide the header as BaseScreen provides its own header
       }} />
-      <About />
+      <AboutScreen />
     </View>
   );
 }

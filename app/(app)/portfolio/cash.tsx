@@ -1,7 +1,7 @@
 // app/(app)/portfolio/cash.tsx
 import React from "react";
-import CashManagementScreen from "../../../src/screens/Portfolio/CashManagementScreen";
+import { CashScreen } from "../../../src/screens";
 
 export default function CashManagementRoute() {
-  return <CashManagementScreen />;
+  return <CashScreen />;
 }

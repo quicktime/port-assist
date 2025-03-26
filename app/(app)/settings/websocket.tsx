@@ -1,7 +1,7 @@
 // app/(app)/settings/websocket.tsx
 import React from "react";
-import WebSocketConfigScreen from "../../../src/screens/Settings/WebSocketConfigScreen";
+import { WebSocketScreen } from "../../../src/screens";
 
 export default function WebSocketSettingsRoute() {
-  return <WebSocketConfigScreen />;
+  return <WebSocketScreen />;
 }

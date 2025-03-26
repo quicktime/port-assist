@@ -1,7 +1,7 @@
 // app/(app)/options/add.tsx
 import React from "react";
-import AddEditOptionPositionScreen from "../../../src/screens/Portfolio/AddEditOptionPositionScreen";
+import { AddOptionScreen } from "../../../src/screens";
 
 export default function AddOptionRoute() {
-  return <AddEditOptionPositionScreen mode="add" />;
+  return <AddOptionScreen />;
 }

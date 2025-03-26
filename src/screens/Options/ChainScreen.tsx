@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, ScrollView, FlatList, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import {
-  Appbar,
   Text,
   Button,
   Card,
   useTheme,
   ActivityIndicator,
   SegmentedButtons,
-  DataTable,
   Menu,
   Searchbar,
 } from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   fetchOptionsData,
   fetchOptionsExpirations,
@@ -20,19 +18,18 @@ import {
   OptionData,
 } from "../../services/polygon";
 import { usePolygonWebSocket } from "../../provider/PolygonWebSocketProvider";
-import { useAppTheme } from "../../provider/ThemeProvider";
-import { router } from "expo-router";
+import { BaseScreen, LoadingScreen } from "../";
+import { commonStyles } from "../styles/common";
 
-type OptionsChainScreenProps = {
-  symbol: string;
-};
-
-export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) {
-  const { isDarkMode, toggleTheme } = useAppTheme();
+/**
+ * Screen for displaying the options chain for a specific underlying symbol
+ */
+export default function ChainScreen() {
+  const params = useLocalSearchParams();
   const paperTheme = useTheme();
-  const styles = createStyle(isDarkMode, paperTheme);
   const { subscribe, unsubscribe, isConnected } = usePolygonWebSocket();
-
+  const symbol = params.symbol as string;
+  
   const [stockPrice, setStockPrice] = useState<number | null>(null);
   const [optionType, setOptionType] = useState<'call' | 'put'>('call');
   const [expirationDates, setExpirationDates] = useState<string[]>([]);
@@ -191,75 +188,26 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
       option.openInterest.toString().includes(filterText))
   ).sort((a, b) => a.strikePrice - b.strikePrice);
 
-  // Render individual option item
-  const renderOptionItem = ({ item }: { item: OptionData }) => {
-    const inTheMoney = optionType === 'call'
-      ? item.strikePrice < (stockPrice || 0)
-      : item.strikePrice > (stockPrice || 0);
-
-    return (
-      <TouchableOpacity
-        onPress={() => {
-          // Navigate to option detail screen with option data
-          router.push({
-            pathname: '/(app)/options/detail',
-            params: { option: JSON.stringify(item) }
-          });
-        }}
-      >
-        <DataTable.Row
-          style={[
-            styles.optionRow,
-            inTheMoney && {
-              backgroundColor: isDarkMode
-                ? 'rgba(46, 125, 50, 0.2)'
-                : 'rgba(46, 125, 50, 0.1)'
-            }
-          ]}
-        >
-          <DataTable.Cell>{item.strikePrice.toFixed(2)}</DataTable.Cell>
-          <DataTable.Cell numeric>{item.lastPrice.toFixed(2)}</DataTable.Cell>
-          <DataTable.Cell numeric>{item.greeks.delta}</DataTable.Cell>
-          <DataTable.Cell numeric>{item.greeks.gamma}</DataTable.Cell>
-          <DataTable.Cell numeric>{item.greeks.theta}</DataTable.Cell>
-          <DataTable.Cell numeric>{item.greeks.vega}</DataTable.Cell>
-          <DataTable.Cell numeric>{item.openInterest}</DataTable.Cell>
-          <DataTable.Cell numeric>{(item.impliedVolatility * 100).toFixed(1)}%</DataTable.Cell>
-
-        </DataTable.Row>
-      </TouchableOpacity>
-    );
+  // Helper function to format Greek values
+  const formatGreekValue = (value: number) => {
+    return value.toFixed(4);
   };
 
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Appbar.Header>
-          <Appbar.BackAction onPress={() => router.back()} />
-          <Appbar.Content title={`${symbol} Options`} />
-        </Appbar.Header>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={paperTheme.colors.primary} />
-          <Text variant="bodyLarge" style={styles.loadingText}>Loading options data...</Text>
-        </View>
-      </SafeAreaView>
+      <LoadingScreen message="Loading options data..." />
     );
   }
 
   // Main render
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title={`${symbol} Options`} />
-        <Appbar.Action
-          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
-          onPress={toggleTheme}
-        />
-      </Appbar.Header>
-
-      <ScrollView style={styles.scrollView}>
+    <BaseScreen
+      title={`${symbol} Options`}
+      showBackButton={true}
+      onBack={() => router.back()}
+    >
+      <ScrollView style={commonStyles.content}>
         <Card style={styles.overviewCard}>
           <Card.Content>
             <View style={styles.overviewHeader}>
@@ -321,126 +269,115 @@ export default function OptionsChainScreen({ symbol }: OptionsChainScreenProps) 
               style={styles.searchBar}
             />
 
-<View style={styles.tableContainer}>
-  {/* Fixed header row */}
-  <View style={styles.tableHeader}>
-    <View style={[styles.headerCell, styles.strikeCell]}>
-      <Text style={styles.headerText}>Strike</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>Premium</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>Delta</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>Gamma</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>Theta</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>Vega</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>OI</Text>
-    </View>
-    <View style={[styles.headerCell, styles.numericCell]}>
-      <Text style={styles.headerText}>IV%</Text>
-    </View>
-  </View>
+            <View style={styles.tableContainer}>
+              {/* Fixed header row */}
+              <View style={styles.tableHeader}>
+                <View style={[styles.headerCell, styles.strikeCell]}>
+                  <Text style={styles.headerText}>Strike</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Premium</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Delta</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Gamma</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Theta</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>Vega</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>OI</Text>
+                </View>
+                <View style={[styles.headerCell, styles.numericCell]}>
+                  <Text style={styles.headerText}>IV%</Text>
+                </View>
+              </View>
 
-  {/* Content area with scrolling */}
-  {loadingOptions ? (
-    <View style={styles.loadingOptionsContainer}>
-      <ActivityIndicator size="small" color={paperTheme.colors.primary} />
-      <Text style={styles.loadingOptionsText}>Loading options...</Text>
-    </View>
-  ) : filteredOptions.length > 0 ? (
-    <FlatList
-      data={filteredOptions}
-      renderItem={({ item }) => {
-        // Determine if strike price is above or below current stock price
-        const isAboveStrike = item.strikePrice > (stockPrice || 0);
-        const isBelowStrike = item.strikePrice < (stockPrice || 0);
-        const isAtStrike = !isAboveStrike && !isBelowStrike;
-        
-        // Select row color based on strike price comparison
-        const rowColor = optionType === 'call'
-          ? (isBelowStrike ? paperTheme.colors.primary : isAboveStrike ? paperTheme.colors.error : 'transparent')
-          : (isAboveStrike ? paperTheme.colors.primary : isBelowStrike ? paperTheme.colors.error : 'transparent');
-        
-        return (
-          <TouchableOpacity
-            onPress={() => {
-              // Navigate to option detail screen with option data
-              router.push({
-                pathname: '/(app)/options/detail',
-                params: { option: JSON.stringify(item) }
-              });
-            }}
-          >
-            <View style={[
-              styles.rowContainer,
-              { backgroundColor: rowColor ? `${rowColor}20` : undefined } // 20 is hex for 12% opacity
-            ]}>
-              <View style={[styles.rowCell, styles.strikeCell]}>
-                <Text style={styles.rowText}>{item.strikePrice.toFixed(2)}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{item.lastPrice.toFixed(2)}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{formatGreekValue(item.greeks.delta)}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{formatGreekValue(item.greeks.gamma)}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{formatGreekValue(item.greeks.theta)}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{formatGreekValue(item.greeks.vega)}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{item.openInterest}</Text>
-              </View>
-              <View style={[styles.rowCell, styles.numericCell]}>
-                <Text style={styles.rowText}>{(item.impliedVolatility * 100).toFixed(1)}%</Text>
-              </View>
+              {/* Content area with scrolling */}
+              {loadingOptions ? (
+                <View style={styles.loadingOptionsContainer}>
+                  <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                  <Text style={styles.loadingOptionsText}>Loading options...</Text>
+                </View>
+              ) : filteredOptions.length > 0 ? (
+                <FlatList
+                  data={filteredOptions}
+                  renderItem={({ item }) => {
+                    // Determine if strike price is above or below current stock price
+                    const isAboveStrike = item.strikePrice > (stockPrice || 0);
+                    const isBelowStrike = item.strikePrice < (stockPrice || 0);
+                    const isAtStrike = !isAboveStrike && !isBelowStrike;
+                    
+                    // Select row color based on strike price comparison
+                    const rowColor = optionType === 'call'
+                      ? (isBelowStrike ? paperTheme.colors.primary : isAboveStrike ? paperTheme.colors.error : 'transparent')
+                      : (isAboveStrike ? paperTheme.colors.primary : isBelowStrike ? paperTheme.colors.error : 'transparent');
+                    
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          // Navigate to option detail screen with option data
+                          router.push({
+                            pathname: '/(app)/options/detail',
+                            params: { option: JSON.stringify(item) }
+                          });
+                        }}
+                      >
+                        <View style={[
+                          styles.rowContainer,
+                          { backgroundColor: rowColor ? `${rowColor}20` : undefined } // 20 is hex for 12% opacity
+                        ]}>
+                          <View style={[styles.rowCell, styles.strikeCell]}>
+                            <Text style={styles.rowText}>{item.strikePrice.toFixed(2)}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{item.lastPrice.toFixed(2)}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{formatGreekValue(item.greeks.delta)}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{formatGreekValue(item.greeks.gamma)}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{formatGreekValue(item.greeks.theta)}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{formatGreekValue(item.greeks.vega)}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{item.openInterest}</Text>
+                          </View>
+                          <View style={[styles.rowCell, styles.numericCell]}>
+                            <Text style={styles.rowText}>{(item.impliedVolatility * 100).toFixed(1)}%</Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  keyExtractor={(item) => item.symbol}
+                  style={styles.flatList}
+                  showsVerticalScrollIndicator={true}
+                />
+              ) : (
+                <View style={styles.noOptionsContainer}>
+                  <Text>No options available for this selection</Text>
+                </View>
+              )}
             </View>
-          </TouchableOpacity>
-        );
-      }}
-      keyExtractor={(item) => item.symbol}
-      style={styles.flatList}
-      showsVerticalScrollIndicator={true}
-    />
-  ) : (
-    <View style={styles.noOptionsContainer}>
-      <Text>No options available for this selection</Text>
-    </View>
-  )}
-</View>
           </Card.Content>
         </Card>
       </ScrollView>
-    </SafeAreaView>
+    </BaseScreen>
   );
 }
 
-// Helper function to format Greek values
-const formatGreekValue = (value: number) => {
-  return value.toFixed(4);
-};
-
-const createStyle = (isDarkMode: boolean, paperTheme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
+const styles = StyleSheet.create({
   tableContainer: {
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.12)',
@@ -450,7 +387,7 @@ const createStyle = (isDarkMode: boolean, paperTheme: any) => StyleSheet.create(
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(0,0,0,0.05)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.12)',
     zIndex: 1, // Ensure header stays on top
@@ -499,16 +436,8 @@ const createStyle = (isDarkMode: boolean, paperTheme: any) => StyleSheet.create(
   scrollViewContent: {
     flexGrow: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-  },
   overviewCard: {
-    margin: 16,
+    marginVertical: 8,
     borderRadius: 8,
   },
   overviewHeader: {
@@ -536,17 +465,12 @@ const createStyle = (isDarkMode: boolean, paperTheme: any) => StyleSheet.create(
     marginTop: 8,
   },
   optionsCard: {
-    margin: 16,
-    marginTop: 0,
+    marginVertical: 8,
     borderRadius: 8,
     marginBottom: 32,
   },
   searchBar: {
     marginBottom: 16,
     backgroundColor: 'transparent',
-  },
-  optionRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.12)',
   },
 });

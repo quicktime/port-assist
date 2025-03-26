@@ -1,7 +1,7 @@
 // app/(app)/portfolio/add.tsx
 import React from "react";
-import AddEditStockScreen from "../../../src/screens/Portfolio/AddEditStockScreen";
+import { AddPortfolioScreen } from "../../../src/screens";
 
 export default function AddStockRoute() {
-  return <AddEditStockScreen mode="add" />;
+  return <AddPortfolioScreen />;
 }

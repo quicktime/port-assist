@@ -1,10 +1,7 @@
-// app/(app)/profile.tsx
-import React, { useEffect, useState } from "react";
-import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from "react-native";
-import { router } from "expo-router";
-import { supabase } from "src/initSupabase";
+import React, { useEffect, useState } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { router } from 'expo-router';
 import {
-  Appbar,
   Text,
   Button,
   TextInput,
@@ -12,17 +9,17 @@ import {
   useTheme,
   List,
   Divider
-} from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAppTheme } from "src/provider/ThemeProvider";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import WebSocketStatus from "src/components/WebSocketStatus";
+} from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { supabase } from '../../initSupabase';
+import WebSocketStatus from '../../components/WebSocketStatus';
+import BaseScreen from '../components/BaseScreen';
+import { commonStyles } from '../styles/common';
 
-export default function Profile() {
+const ProfileScreen = () => {
   const paperTheme = useTheme();
-  const { isDarkMode, toggleTheme } = useAppTheme();
-  const [contributionAmount, setContributionAmount] = useState("777");
-  const [targetDate, setTargetDate] = useState("2025-12-31");
+  const [contributionAmount, setContributionAmount] = useState('777');
+  const [targetDate, setTargetDate] = useState('2025-12-31');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showWebSocketStatus, setShowWebSocketStatus] = useState(true);
   
@@ -38,46 +35,38 @@ export default function Profile() {
   
   // Example monthly contributions data
   const [monthlyContributions, setMonthlyContributions] = useState([
-    { date: "2024-01-01", amount: 777, status: "completed" },
-    { date: "2024-02-01", amount: 777, status: "completed" },
-    { date: "2024-03-01", amount: 777, status: "completed" },
-    { date: "2024-04-01", amount: 777, status: "upcoming" },
-    { date: "2024-05-01", amount: 777, status: "upcoming" },
+    { date: '2024-01-01', amount: 777, status: 'completed' },
+    { date: '2024-02-01', amount: 777, status: 'completed' },
+    { date: '2024-03-01', amount: 777, status: 'completed' },
+    { date: '2024-04-01', amount: 777, status: 'upcoming' },
+    { date: '2024-05-01', amount: 777, status: 'upcoming' },
   ]);
 
   const addContribution = () => {
-    Alert.alert("Success", "New contribution added to your plan");
+    Alert.alert('Success', 'New contribution added to your plan');
   };
 
   const markAsCompleted = (index: number) => {
     const updatedContributions = [...monthlyContributions];
-    updatedContributions[index].status = "completed";
+    updatedContributions[index].status = 'completed';
     setMonthlyContributions(updatedContributions);
   };
 
   const totalContributed = monthlyContributions
-    .filter(item => item.status === "completed")
+    .filter(item => item.status === 'completed')
     .reduce((sum, item) => sum + item.amount, 0);
 
   const remainingMonths = monthlyContributions
-    .filter(item => item.status === "upcoming").length;
+    .filter(item => item.status === 'upcoming').length;
     
   // Navigate to WebSocket settings
   const goToWebSocketSettings = () => {
-    router.push('/websocket-settings');
+    router.push('/settings/websocket');
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-      <Appbar.Header>
-        <Appbar.Content title="Profile & Investment Plan" />
-        <Appbar.Action
-          icon={isDarkMode ? "white-balance-sunny" : "weather-night"}
-          onPress={toggleTheme}
-        />
-      </Appbar.Header>
-      
-      <ScrollView style={{ flex: 1 }}>
+    <BaseScreen title="Profile & Investment Plan">
+      <ScrollView style={commonStyles.content}>
         <View style={styles.container}>
           <Surface style={styles.section} elevation={2}>
             <Text variant="titleLarge" style={styles.sectionTitle}>Account Information</Text>
@@ -93,7 +82,7 @@ export default function Profile() {
               
               <View style={styles.profileDetails}>
                 <Text variant="titleMedium">
-                  {userEmail || "User"}
+                  {userEmail || 'User'}
                 </Text>
                 <Text variant="bodySmall" style={{ marginTop: 5 }}>
                   Member since {new Date().toLocaleDateString()}
@@ -149,7 +138,7 @@ export default function Profile() {
               
               <Button
                 mode="contained"
-                onPress={() => Alert.alert("Success", "Investment plan updated")}
+                onPress={() => Alert.alert('Success', 'Investment plan updated')}
                 style={{ marginTop: 10 }}
               >
                 Update Plan
@@ -193,16 +182,16 @@ export default function Profile() {
                     <Text variant="bodySmall">${contribution.amount}</Text>
                   </View>
                   
-                  {contribution.status === "completed" ? (
+                  {contribution.status === 'completed' ? (
                     <View style={[styles.badge, { backgroundColor: paperTheme.colors.primary }]}>
-                      <Text variant="labelSmall" style={{ color: "white" }}>Completed</Text>
+                      <Text variant="labelSmall" style={{ color: 'white' }}>Completed</Text>
                     </View>
                   ) : (
                     <TouchableOpacity
                       style={[styles.badge, { backgroundColor: paperTheme.colors.secondary }]}
                       onPress={() => markAsCompleted(index)}
                     >
-                      <Text variant="labelSmall" style={{ color: "white" }}>Mark as Completed</Text>
+                      <Text variant="labelSmall" style={{ color: 'white' }}>Mark as Completed</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -218,7 +207,7 @@ export default function Profile() {
             </Button>
             <Button
               mode="contained"
-              onPress={() => router.push('/cash-management')}
+              onPress={() => router.push('/portfolio/cash')}
               icon="cash-multiple"
               style={{ marginTop: 10 }}
             >
@@ -227,9 +216,9 @@ export default function Profile() {
           </Surface>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </BaseScreen>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -244,8 +233,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   profileInfo: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   profileAvatar: {
     marginRight: 20,
@@ -254,16 +243,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   planStats: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
   statBox: {
-    alignItems: "center",
+    alignItems: 'center',
     padding: 12,
     borderRadius: 8,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    minWidth: "30%",
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    minWidth: '30%',
   },
   planSettings: {
     marginTop: 16,
@@ -272,12 +261,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   contributionItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.1)",
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   badge: {
     paddingHorizontal: 12,
@@ -285,3 +274,5 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
 });
+
+export default ProfileScreen;

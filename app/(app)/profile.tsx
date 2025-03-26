@@ -3,7 +3,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Stack } from "expo-router";
 import { useAppTheme } from "../../src/provider/ThemeProvider";
-import Profile from "../../src/screens/Profile";
+import { ProfileScreen } from "../../src/screens";
 
 export default function ProfileRoute() {
   const { theme } = useAppTheme();
@@ -16,8 +16,9 @@ export default function ProfileRoute() {
           backgroundColor: theme.colors.background,
         },
         headerTintColor: theme.colors.text,
+        headerShown: false, // Hide header as BaseScreen provides its own
       }} />
-      <Profile />
+      <ProfileScreen />
     </View>
   );
 }

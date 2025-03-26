@@ -1,7 +1,7 @@
 // app/(app)/dashboard/trade-strategy.tsx
 import React from "react";
-import TradeStrategyScreen from "../../../src/screens/Portfolio/TradeStrategyScreen";
+import { StrategyScreen } from "../../../src/screens";
 
 export default function TradeStrategyRoute() {
-  return <TradeStrategyScreen />;
+  return <StrategyScreen />;
 }

@@ -1,7 +1,7 @@
 // app/(app)/dashboard/index.tsx
 import React from "react";
-import CombinedPortfolioDashboard from "../../../src/screens/Portfolio/CombinedPortfolioDashboard";
+import { IndexScreen } from "../../../src/screens";
 
 export default function DashboardRoute() {
-  return <CombinedPortfolioDashboard />;
+  return <IndexScreen />;
 }

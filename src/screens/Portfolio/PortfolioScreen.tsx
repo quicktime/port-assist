@@ -1,34 +1,21 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { router } from "expo-router";
-import { View, FlatList, RefreshControl, TouchableOpacity, Alert, StyleSheet } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import {
-  Appbar,
-  Text,
-  Card,
-  Button,
-  Surface,
-  useTheme,
-  IconButton,
-  Divider,
-  ActivityIndicator
-} from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  PortfolioItem,
-  getPortfolio,
-  getPortfolioSummary,
-  deletePortfolioItem,
-  getPortfolioWithCurrentPrices
-} from "../../services/portfolio";
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { router } from 'expo-router';
+import { Text, Button, Surface, Card, Divider, IconButton } from 'react-native-paper';
+import { useTheme } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { PortfolioItem, getPortfolioSummary, deletePortfolioItem, getPortfolioWithCurrentPrices } from '../../services/portfolio';
 import { fetchMarketStatus } from '../../services/polygon';
-import { MainStackParamList } from "../../types/navigation";
-import { useAppTheme } from "../../provider/ThemeProvider";
-// WebSocket service import removed
+import BaseScreen from '../components/BaseScreen';
+import LoadingScreen from '../components/LoadingScreen';
+import EmptyState from '../components/EmptyState';
+import PortfolioCard from '../../components/PortfolioCard';
+import { commonStyles, cardStyles } from '../styles/common';
 
-export default function PortfolioScreen() {
-  const { isDarkMode, toggleTheme } = useAppTheme();
+/**
+ * Portfolio screen showing list of stocks and portfolio summary
+ */
+const PortfolioScreen = () => {
   const paperTheme = useTheme();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [summary, setSummary] = useState({
@@ -42,7 +29,6 @@ export default function PortfolioScreen() {
   });
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
 
   const loadPortfolioData = async () => {
     try {
@@ -59,8 +45,8 @@ export default function PortfolioScreen() {
       });
       setPortfolio(summaryData.items);
     } catch (error) {
-      console.error("Error loading portfolio:", error);
-      Alert.alert("Error", "Failed to load portfolio data");
+      console.error('Error loading portfolio:', error);
+      Alert.alert('Error', 'Failed to load portfolio data');
     } finally {
       setLoading(false);
     }
@@ -76,18 +62,18 @@ export default function PortfolioScreen() {
       try {
         const marketStatus = await fetchMarketStatus();
 
-        if (marketStatus === "open") {
+        if (marketStatus === 'open') {
           refreshInterval = setInterval(async () => {
             try {
               const updatedPortfolio = await getPortfolioWithCurrentPrices();
               setPortfolio(updatedPortfolio);
             } catch (error) {
-              console.error("Error refreshing portfolio:", error);
+              console.error('Error refreshing portfolio:', error);
             }
           }, 5 * 60 * 1000); // 5 minutes
         }
       } catch (error) {
-        console.error("Error checking market status:", error);
+        console.error('Error checking market status:', error);
       }
     };
 
@@ -106,39 +92,42 @@ export default function PortfolioScreen() {
     try {
       await loadPortfolioData();
     } catch (error) {
-      console.error("Error refreshing portfolio:", error);
-      Alert.alert("Error", "Failed to refresh portfolio data");
+      console.error('Error refreshing portfolio:', error);
+      Alert.alert('Error', 'Failed to refresh portfolio data');
     } finally {
       setRefreshing(false);
     }
   }, []);
 
   const handleAddStock = () => {
-    navigation.navigate("AddStock");
+    router.push('/portfolio/add');
   };
 
   const handleEditStock = (item: PortfolioItem) => {
-    navigation.navigate("EditStock", { item });
+    router.push({
+      pathname: '/portfolio/edit',
+      params: { item: JSON.stringify(item) }
+    });
   };
 
   const handleDeleteStock = async (id?: string) => {
     if (!id) return;
 
     Alert.alert(
-      "Delete Stock",
-      "Are you sure you want to delete this stock from your portfolio?",
+      'Delete Stock',
+      'Are you sure you want to delete this stock from your portfolio?',
       [
-        { text: "Cancel", style: "cancel" },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: "Delete",
-          style: "destructive",
+          text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
             try {
               await deletePortfolioItem(id);
               await loadPortfolioData();
             } catch (error) {
-              console.error("Error deleting stock:", error);
-              Alert.alert("Error", "Failed to delete stock");
+              console.error('Error deleting stock:', error);
+              Alert.alert('Error', 'Failed to delete stock');
             }
           }
         }
@@ -150,55 +139,19 @@ export default function PortfolioScreen() {
     router.push(`/options-chain/${symbol}`);
   };
 
-  const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => {
-    const isProfitable = (item.profit_loss_percent || 0) >= 0;
-
-    return (
-      <TouchableOpacity
-        onPress={() => handleEditStock(item)}
-        onLongPress={() => handleDeleteStock(item.id)}
-        style={styles.itemContainer}
-      >
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <Text variant="titleLarge">{item.symbol}</Text>
-              <IconButton
-                icon="chart-line-variant"
-                size={20}
-                onPress={() => handleViewOptions(item.symbol)}
-              />
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.cardRow}>
-              <Text variant="bodyMedium">{item.shares} shares @ ${item.avg_price.toFixed(2)}</Text>
-              <Text variant="bodyMedium">${item.current_price?.toFixed(2) || "N/A"}</Text>
-            </View>
-
-            <View style={styles.cardRow}>
-              <Text variant="bodyMedium">Value: ${item.value?.toFixed(2) || "N/A"}</Text>
-              <Text
-                variant="bodyMedium"
-                style={{
-                  color: isProfitable ? paperTheme.colors.primary : paperTheme.colors.error,
-                }}
-              >
-                {isProfitable ? "+" : ""}{item.profit_loss_percent?.toFixed(2)}% (${item.profit_loss?.toFixed(2)})
-              </Text>
-            </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
-    );
-  };
+  // Render portfolio item using PortfolioCard component
+  const renderPortfolioItem = ({ item }: { item: PortfolioItem }) => (
+    <PortfolioCard 
+      item={item} 
+      onPress={() => handleEditStock(item)}
+    />
+  );
 
   // Generate some sample data before user adds their own stocks
   const getSampleData = () => {
     return [
       {
-        symbol: "RXRX",
+        symbol: 'RXRX',
         shares: 100,
         avg_price: 15.75,
         current_price: 16.25,
@@ -208,7 +161,7 @@ export default function PortfolioScreen() {
         profit_loss_percent: 3.17
       },
       {
-        symbol: "ACHR",
+        symbol: 'ACHR',
         shares: 100,
         avg_price: 12.33,
         current_price: 13.45,
@@ -218,7 +171,7 @@ export default function PortfolioScreen() {
         profit_loss_percent: 9.08
       },
       {
-        symbol: "HOOD",
+        symbol: 'HOOD',
         shares: 80,
         avg_price: 22.14,
         current_price: 21.75,
@@ -227,52 +180,53 @@ export default function PortfolioScreen() {
         profit_loss: -31.20,
         profit_loss_percent: -1.76
       }
-    ];
+    ] as PortfolioItem[];
   };
 
   const displayedPortfolio = portfolio.length > 0 ? portfolio : getSampleData();
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Appbar.Header>
-          <Appbar.Content title="Portfolio" />
-          <Appbar.Action
-            icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
-            onPress={toggleTheme}
-          />
-        </Appbar.Header>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={paperTheme.colors.primary} />
-          <Text variant="bodyMedium" style={{ marginTop: 16 }}>Loading portfolio data...</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <LoadingScreen title="Portfolio" message="Loading portfolio data..." />;
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Appbar.Header>
-        <Appbar.Content title="Portfolio" />
-        <Appbar.Action
-          icon={isDarkMode ? "white-balance-sunny" : "moon-waning-crescent"}
-          onPress={toggleTheme}
-        />
-      </Appbar.Header>
+  // Portfolio header buttons component
+  const PortfolioActions = () => (
+    <View style={commonStyles.headerButtons}>
+      <Button
+        mode="contained"
+        onPress={handleAddStock}
+        icon="plus"
+        style={commonStyles.headerButton}
+      >
+        Add Stock
+      </Button>
+      <Button
+        mode="contained-tonal"
+        onPress={() => router.push('/dashboard/trade-recommendations')}
+        icon="finance"
+        style={commonStyles.headerButton}
+      >
+        Trade Ideas
+      </Button>
+    </View>
+  );
 
-      <View style={styles.content}>
-        <Surface style={styles.summaryCard} elevation={1}>
-          <View style={styles.summaryRow}>
+  return (
+    <BaseScreen title="Portfolio">
+      <View style={commonStyles.content}>
+        {/* Portfolio Summary */}
+        <Surface style={commonStyles.surface} elevation={1}>
+          <View style={commonStyles.row}>
             <Text variant="titleMedium">Total Value</Text>
             <Text variant="titleMedium">${summary.totalValue.toFixed(2)}</Text>
           </View>
 
-          <View style={styles.summaryRow}>
+          <View style={commonStyles.row}>
             <Text variant="bodyMedium">Cost Basis</Text>
             <Text variant="bodyMedium">${summary.totalCost.toFixed(2)}</Text>
           </View>
 
-          <View style={styles.summaryRow}>
+          <View style={commonStyles.row}>
             <Text variant="bodyMedium">Profit/Loss</Text>
             <Text
               variant="bodyMedium"
@@ -280,36 +234,23 @@ export default function PortfolioScreen() {
                 color: summary.totalProfit >= 0 ? paperTheme.colors.primary : paperTheme.colors.error,
               }}
             >
-              {summary.totalProfit >= 0 ? "+" : ""}{summary.totalProfitPercent.toFixed(2)}% (${summary.totalProfit.toFixed(2)})
+              {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfitPercent.toFixed(2)}% (${summary.totalProfit.toFixed(2)})
             </Text>
           </View>
         </Surface>
-        <View style={styles.holdingsHeader}>
+
+        {/* Portfolio Header */}
+        <View style={commonStyles.row}>
           <Text variant="titleLarge">Holdings</Text>
-          <View style={styles.headerButtons}>
-            <Button
-              mode="contained"
-              onPress={handleAddStock}
-              icon="plus"
-              style={styles.headerButton}
-            >
-              Add Stock
-            </Button>
-            <Button
-              mode="contained-tonal"
-              onPress={() => router.push('/trade-recommendations')}
-              icon="finance"
-              style={styles.headerButton}
-            >
-              Get Trade Ideas
-            </Button>
-          </View>
+          <PortfolioActions />
         </View>
+
+        {/* Portfolio List */}
         <FlatList
           data={displayedPortfolio}
           renderItem={renderPortfolioItem}
           keyExtractor={(item) => item.id || item.symbol}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={{ paddingBottom: 16 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -318,32 +259,41 @@ export default function PortfolioScreen() {
               tintColor={paperTheme.colors.primary}
             />
           }
+          ListEmptyComponent={
+            <EmptyState 
+              message="Your portfolio is empty. Add stocks to get started."
+              icon="chart-line"
+              buttonLabel="Add Stock"
+              onButtonPress={handleAddStock}
+            />
+          }
         />
 
+        {/* Cash Management Card */}
         {summary.cashBalance > 0 && (
           <TouchableOpacity
-            onPress={() => router.push('/cash-management')}
-            style={styles.itemContainer}
+            onPress={() => router.push('/portfolio/cash')}
+            style={{ marginBottom: 12 }}
           >
-            <Card style={styles.card}>
+            <Card style={cardStyles.card}>
               <Card.Content>
-                <View style={styles.cardHeader}>
+                <View style={cardStyles.cardHeader}>
                   <Text variant="titleLarge">Cash</Text>
                   <IconButton
                     icon="cash-multiple"
                     size={20}
-                    onPress={() => router.push('/cash-management')}
+                    onPress={() => router.push('/portfolio/cash')}
                   />
                 </View>
 
-                <Divider style={styles.divider} />
+                <Divider style={commonStyles.divider} />
 
-                <View style={styles.cardRow}>
+                <View style={cardStyles.cardRow}>
                   <Text variant="bodyMedium">Available for investment</Text>
                   <Text variant="bodyMedium">${summary.cashBalance.toFixed(2)}</Text>
                 </View>
 
-                <View style={styles.cardRow}>
+                <View style={cardStyles.cardRow}>
                   <Text variant="bodyMedium">Allocation</Text>
                   <Text variant="bodyMedium">{summary.cashAllocation.toFixed(2)}%</Text>
                 </View>
@@ -353,85 +303,15 @@ export default function PortfolioScreen() {
         )}
 
         {portfolio.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text variant="bodyMedium" style={styles.emptyText}>
+          <View style={commonStyles.emptyState}>
+            <Text variant="bodyMedium" style={commonStyles.emptyText}>
               Sample data shown. Add your own stocks to get started.
             </Text>
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </BaseScreen>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryCard: {
-    padding: 16,
-    marginTop: 16,
-    borderRadius: 8,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  holdingsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-  },
-  headerButton: {
-    marginLeft: 8,
-    marginBottom: 4,
-  },
-  listContainer: {
-    paddingBottom: 16,
-  },
-  itemContainer: {
-    marginBottom: 12,
-  },
-  card: {
-    borderRadius: 8,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  divider: {
-    marginVertical: 8,
-  },
-  cardRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-  },
-  emptyState: {
-    alignItems: "center",
-    marginTop: 24,
-  },
-  emptyText: {
-    fontStyle: "italic",
-    opacity: 0.7,
-  },
-});
+export default PortfolioScreen;

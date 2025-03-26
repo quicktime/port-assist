@@ -1,7 +1,7 @@
 // app/(app)/dashboard/trade-recommendations.tsx
 import React from "react";
-import TradeRecommendationsScreen from "../../../src/screens/Portfolio/TradeRecommendationsScreen";
+import { RecommendationsScreen } from "../../../src/screens";
 
 export default function TradeRecommendationsRoute() {
-  return <TradeRecommendationsScreen />;
+  return <RecommendationsScreen />;
 }
